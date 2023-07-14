@@ -14,14 +14,17 @@ import Acme.NotAJoke.Field
 import Acme.NotAJoke.Nonce
 import Acme.NotAJoke.JWS
 
+-- | The contact-field of an account (something like `mailto:certmaster@example.com`)
 type Contact = Text
 
+-- | An RFC-defined account status.
 data AccountStatus
   = AccountValid
   | AccountDeactivated
   | AccountRevoked
   deriving (Show, Eq)
 
+-- | A structure holding various Account field.
 data Account a
   = Account
   { status :: Field a "status" AccountStatus
@@ -49,13 +52,14 @@ type instance Field "account-fetch" "onlyReturnExisting" x = x
 newtype AccountCreated = AccountCreated (Wreq.Response ByteString)
   deriving Show
 
-readKID :: AccountCreated -> Maybe KID
-readKID (AccountCreated rsp) = rsp ^? Wreq.responseHeader "location" . to (KID . Encoding.decodeUtf8)
-
+-- | Initializes an account structure, assuming we have read the terms-of-service.
 createAccount :: [ Contact ] -> Account "account-create"
 createAccount = createAccount1 True
 
-createAccount1 :: Bool -> [ Contact ] -> Account "account-create"
+type HasReadTermsOfService = Bool
+
+-- | Initializes an account structure.
+createAccount1 :: HasReadTermsOfService -> [ Contact ] -> Account "account-create"
 createAccount1 tos contacts = Account () () () tos contacts ()
 
 fetchAccount :: [ Contact ] -> Account "account-fetch"
@@ -64,6 +68,11 @@ fetchAccount = fetchAccount1 True True
 fetchAccount1 :: Bool -> Bool -> [ Contact ] -> Account "account-fetch"
 fetchAccount1 tos onlyfetch contacts = Account () () () tos contacts onlyfetch
 
+-- | Lookup a Key Identifier for the account.
+readKID :: AccountCreated -> Maybe KID
+readKID (AccountCreated rsp) = rsp ^? Wreq.responseHeader "location" . to (KID . Encoding.decodeUtf8)
+
+-- | Fetches or create an account (a single API call).
 postCreateAccount :: JWS.JWK -> Endpoint "newAccount" -> Nonce -> Account "account-create" -> IO (Maybe AccountCreated)
 postCreateAccount jwk ep nonce acc = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
@@ -81,6 +90,7 @@ postCreateAccount jwk ep nonce acc = do
                         , "contact" .= acc.contact
                         ]
 
+-- | Only fetches an account (i.e., does not create the account if missing).
 postFetchAccount :: JWS.JWK -> Endpoint "newAccount" -> Nonce -> Account "account-fetch" -> IO (Maybe AccountCreated)
 postFetchAccount jwk ep nonce acc = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
@@ -98,4 +108,3 @@ postFetchAccount jwk ep nonce acc = do
                         , "contact" .= acc.contact
                         , "onlyReturnExisting" .= acc.onlyReturnExisting
                         ]
-

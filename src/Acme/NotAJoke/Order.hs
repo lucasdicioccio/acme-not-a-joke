@@ -18,6 +18,7 @@ import Acme.NotAJoke.Nonce
 import Acme.NotAJoke.JWS
 import Acme.NotAJoke.CSR
 
+-- | RFC-defined order statuses.
 data OrderStatus
   = OrderPending
   | OrderReady
@@ -36,8 +37,10 @@ instance FromJSON OrderStatus where
                   "invalid" -> pure OrderInvalid
                   _     -> fail $ "invalid order status:" <> show txt
 
+-- | RFC-defined order types (for the subset supported in this library).
 data OrderType
   = DNSOrder
+  -- ^ Order is about requesting DNS certificates.
   deriving (Show, Eq, Ord)
 
 instance ToJSON OrderType where
@@ -49,6 +52,7 @@ instance FromJSON OrderType where
                   "dns" -> pure DNSOrder
                   _     -> fail $ "invalid ordertype:" <> show txt
 
+-- | RFC-defined order identifier.
 data OrderIdentifier
   = OrderIdentifier
   { type_ :: OrderType
@@ -64,6 +68,7 @@ instance FromJSON OrderIdentifier where
                  <$> o .: "type"
                  <*> o .: "value"
 
+-- | RFC-defined order structure.
 data Order a
   = Order
   { status :: Field a "status" OrderStatus
@@ -113,16 +118,18 @@ instance FromJSON (Order "order-created") where
                   <*> v .: "finalize"
                   <*> pure ()
 
+-- | Prepare a new order.
+createOrder :: (Maybe UTCTime, Maybe UTCTime) -> [ OrderIdentifier ] -> Order "order-create"
+createOrder (nbefore,nafter) ois =
+  Order ()() ois nbefore nafter () () () ()
+
 readOrderUrl :: OrderCreated -> Maybe (Url "order")
 readOrderUrl (OrderCreated rsp) = rsp ^? Wreq.responseHeader "location" . to (Url . Encoding.decodeUtf8)
 
 readOrderCreated :: OrderCreated -> Maybe (Order "order-created")
 readOrderCreated (OrderCreated rsp) = decode $ rsp ^. Wreq.responseBody
 
-createOrder :: (Maybe UTCTime, Maybe UTCTime) -> [ OrderIdentifier ] -> Order "order-create"
-createOrder (nbefore,nafter) ois =
-  Order ()() ois nbefore nafter () () () ()
-
+-- | Requests a new order to the server.
 postNewOrder :: JWS.JWK -> Endpoint "newOrder" -> KID -> Nonce -> Order "order-create" -> IO (Maybe OrderCreated)
 postNewOrder jwk ep kid nonce ord = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
@@ -174,6 +181,7 @@ readCertificateUrl :: OrderInspected -> Maybe (Url "certificate")
 readCertificateUrl order = 
   certificate =<< readOrderInspected order
 
+-- | Fetches a known order to inspect its status.
 postGetOrder :: JWS.JWK -> Url "order" -> KID -> Nonce -> IO (Maybe OrderInspected)
 postGetOrder jwk orderurl kid nonce = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
@@ -189,6 +197,8 @@ postGetOrder jwk orderurl kid nonce = do
    ep :: Endpoint "order"
    ep = coerce orderurl
 
+-- | RFC-defined finalization request.
+-- Consists of a CSR.
 data Finalize
   = Finalize
   { csr :: CSR
@@ -197,9 +207,11 @@ data Finalize
 newtype OrderFinalized = OrderFinalized (Wreq.Response ByteString)
   deriving (Show)
 
+-- todo: specialize status of a finalized order
 readOrderFinalized :: OrderFinalized -> Maybe (Order "order-created")
 readOrderFinalized (OrderFinalized rsp) = decode $ rsp ^. Wreq.responseBody
 
+-- | Finalize an order after completing a challenge.
 postFinalizeOrder :: JWS.JWK -> KID -> Nonce -> Url "finalize-order" -> Finalize -> IO (Maybe OrderFinalized)
 postFinalizeOrder jwk kid nonce finalizeurl finalizeobj = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
@@ -216,4 +228,3 @@ postFinalizeOrder jwk kid nonce finalizeurl finalizeobj = do
     ep = coerce finalizeurl
     serialized = object $ [ "csr" .= finalizeobj.csr
                           ]
-

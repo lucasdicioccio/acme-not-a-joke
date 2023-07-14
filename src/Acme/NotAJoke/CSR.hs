@@ -1,5 +1,8 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- | A series of helper to work with Certificate Signing Requests.
+--
+-- See the `openssl req` command to build CSR and DER files.
 module Acme.NotAJoke.CSR where
 
 import Data.Text (Text)

@@ -1,3 +1,4 @@
+-- | Helper to build a ValidationProof out of some token
 module Acme.NotAJoke.Validation where
 
 import Data.Coerce (coerce)
@@ -9,7 +10,7 @@ import qualified Crypto.JOSE.JWK as JWK
 
 import Acme.NotAJoke.Challenge
 
-
+-- | RFC-defined key authorizations.
 newtype KeyAuthorization = KeyAuthorization Text
   deriving (Eq, Ord)
 
@@ -37,4 +38,3 @@ sha256digest (KeyAuthorization kauth) =
   where
     hash :: JWK.Digest JWK.SHA256
     hash = JWK.hash $ Encoding.encodeUtf8 kauth
-

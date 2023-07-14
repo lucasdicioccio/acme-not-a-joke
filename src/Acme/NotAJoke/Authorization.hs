@@ -16,6 +16,7 @@ import Acme.NotAJoke.Nonce
 import Acme.NotAJoke.JWS
 import Acme.NotAJoke.Challenge
 
+-- RFC-defined authorization statuses.
 data AuthorizationStatus
   = AuthorizationPending
   | AuthorizationValid
@@ -36,6 +37,7 @@ instance FromJSON AuthorizationStatus where
                   "revoked" -> pure AuthorizationRevoked
                   _     -> fail $ "invalid authorization status:" <> show txt
 
+-- RFC-defined authorization types (only the subset supported in this library).
 data AuthorizationType
   = DNSAuthorization
   deriving (Show, Eq, Ord)
@@ -49,6 +51,7 @@ instance FromJSON AuthorizationType where
                   "dns" -> pure DNSAuthorization
                   _     -> fail $ "invalid ordertype:" <> show txt
 
+-- | RFC-defined authorization identifiers.
 data AuthorizationIdentifier
   = AuthorizationIdentifier
   { type_ :: AuthorizationType
@@ -64,6 +67,7 @@ instance FromJSON AuthorizationIdentifier where
                  <$> o .: "type"
                  <*> o .: "value"
 
+-- | RFC-defined authorization resource.
 data Authorization a
   = Authorization
   { status :: Field a "status" AuthorizationStatus
@@ -91,9 +95,11 @@ instance FromJSON (Authorization "authorization-inspected") where
                   <*> v .: "challenges"
                   <*> v .:? "wildcard"
 
+-- | Lookup an Authorization.
 readAuthorization :: AuthorizationInspected -> Maybe (Authorization "authorization-inspected")
 readAuthorization (AuthorizationInspected rsp) = decode $ rsp ^. Wreq.responseBody
 
+-- | Inspects an authorization from its URL.
 postGetAuthorization :: JWS.JWK -> KID -> Nonce -> Url "authorization" -> IO (Maybe AuthorizationInspected)
 postGetAuthorization jwk kid nonce authUrl = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
@@ -108,4 +114,3 @@ postGetAuthorization jwk kid nonce authUrl = do
   where
     ep :: Endpoint "authorization"
     ep = coerce authUrl
-

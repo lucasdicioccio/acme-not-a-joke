@@ -9,6 +9,7 @@ import Acme.NotAJoke.Endpoint (Url)
 
 type CAAIdentity = Text
 
+-- | RFC-defined ACME server metadata.
 data Meta
   = Meta
   { caaIdentities :: [ CAAIdentity ]

@@ -1,4 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+--- | Helpers to work with JSON Web Signatures for ACME.
+-- Indeed, almost all ACME API calls are signed with a KID or a JWK and
+-- transferred using the JWS format. Thus, some internal helpers are welcome.
 module Acme.NotAJoke.JWS where
 
 import Control.Applicative ((<|>))
@@ -15,8 +18,6 @@ import qualified Crypto.JOSE.JWK as JWK
 import Acme.NotAJoke.Endpoint
 import Acme.NotAJoke.Nonce
 
-
--- JWS
 
 newtype PublicJWK = PublicJWK JWK.JWK
   deriving (Show, FromJSON, ToJSON)
@@ -102,4 +103,3 @@ newtype EmptyText = EmptyText Value
 
 emptyText :: EmptyText
 emptyText = EmptyText (String mempty)
-

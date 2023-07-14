@@ -10,6 +10,9 @@ import Control.Lens hiding ((.=))
 import Acme.NotAJoke.Endpoint
 import Acme.NotAJoke.Meta
 
+-- | RFC-defined directory structure.
+-- 
+-- Mainly contains a series of endpoints.
 data Directory
   = Directory
   { meta :: Meta
@@ -25,6 +28,7 @@ instance FromJSON Directory
 directory :: BaseUrl -> Endpoint "directory"
 directory baseUrl = coerce $ baseUrl <> "directory"
 
+-- | Fetches the server's directory.
 fetchDirectory :: Endpoint "directory" -> IO Directory
 fetchDirectory ep = do
   r <- Wreq.asJSON =<< get ep

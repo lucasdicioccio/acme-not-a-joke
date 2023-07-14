@@ -2,6 +2,11 @@
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 
+-- | Almost all ACME API Calls require a Nonce to prevent replayability of
+-- requests.
+-- Most API Calls return a Nonce for the next request.
+-- Client should re-use these Nonce to avoid overloading the server.
+-- This module provide helpers to deal with this requirement.
 module Acme.NotAJoke.Nonce where
 
 import Data.Coerce (coerce, Coercible)
@@ -13,8 +18,6 @@ import qualified Network.Wreq as Wreq
 import Control.Lens hiding ((.=))
 
 import Acme.NotAJoke.Endpoint
-
--- NONCE
 
 newtype Nonce = Nonce Text
   deriving (Show, FromJSON, ToJSON)
@@ -34,4 +37,3 @@ responseNonceWreqBS = responseNonceWreq
 
 responseNonce :: forall a. Coercible a (Wreq.Response ByteString) => a -> Maybe Nonce
 responseNonce = responseNonceWreqBS . coerce
-
