@@ -20,3 +20,12 @@ fields are available for ACME resources in various APIs/states (e.g., an
 
 We use ACME-not-a-joke as a package name because `acme-` packages on Hackage
 typically are "joke" packages.
+
+## todo list
+
+- tweak supported algos
+- more functions to save/load jwk/pem
+- remove usage of wreq or catch exceptions somehow
+- some more doc
+- keyChange
+- deactivate account
