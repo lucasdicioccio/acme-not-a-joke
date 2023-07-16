@@ -21,6 +21,35 @@ fields are available for ACME resources in various APIs/states (e.g., an
 We use ACME-not-a-joke as a package name because `acme-` packages on Hackage
 typically are "joke" packages.
 
+## example
+
+```console
+bash scripts/gen-csr.sh staging example dicioccio.fr
+```
+
+```hs
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.Dancer
+import Acme.NotAJoke.Directory
+import Acme.NotAJoke.CSR
+import Acme.NotAJoke.Order
+
+import Data.Maybe
+
+loadedjwk <- doLoadJWK "staging/key.jwk"
+let jwk = fromJust newjwk
+der <- doLoadDER "staging-example/certificate.csr.der"
+leDir <- fetchDirectory (directory staging_letsencryptv2)
+let contacts = ["mailto:certmaster@dicioccio.fr"]
+
+nonce0 <- fromJust <$> getNonce leDir.newNonce
+_ <- postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicioccio.fr" ]
+let acc = fetchAccount contacts
+runAcmeDance (AcmeDancer staging_letsencryptv2 jwk acc (CSR der) o basicDance)
+```
+
+
 ## todo list
 
 - tweak supported algos

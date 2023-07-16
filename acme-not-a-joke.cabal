@@ -22,26 +22,26 @@ copyright: Lucas DiCioccio 2023
 extra-source-files: CHANGELOG.md
 
 library
-    -- Modules included in this executable, other than Main.
-    other-modules: Paths_acme_not_a_joke
-    exposed-modules: Acme.NotAJoke.Account
-                   , Acme.NotAJoke.Authorization
-                   , Acme.NotAJoke.CSR
-                   , Acme.NotAJoke.Certificate
-                   , Acme.NotAJoke.Challenge
-                   , Acme.NotAJoke.Client
-                   , Acme.NotAJoke.Directory
-                   , Acme.NotAJoke.Endpoint
-                   , Acme.NotAJoke.Field
-                   , Acme.NotAJoke.JWS
-                   , Acme.NotAJoke.Meta
-                   , Acme.NotAJoke.Nonce
-                   , Acme.NotAJoke.Order
-                   , Acme.NotAJoke.Validation
-
-    -- LANGUAGE extensions used by modules in this package.
+    hs-source-dirs: src
+    ghc-options: -Wall -Wwarn=missing-home-modules
+    default-language: Haskell2010
     default-extensions: OverloadedStrings DataKinds TypeFamilies TypeOperators FlexibleInstances OverloadedRecordDot
-    -- other-extensions:
+    exposed-modules:
+      Acme.NotAJoke.Account
+      Acme.NotAJoke.Authorization
+      Acme.NotAJoke.CSR
+      Acme.NotAJoke.Certificate
+      Acme.NotAJoke.Challenge
+      Acme.NotAJoke.Client
+      Acme.NotAJoke.Dancer
+      Acme.NotAJoke.Directory
+      Acme.NotAJoke.Endpoint
+      Acme.NotAJoke.Field
+      Acme.NotAJoke.JWS
+      Acme.NotAJoke.Meta
+      Acme.NotAJoke.Nonce
+      Acme.NotAJoke.Order
+      Acme.NotAJoke.Validation
     build-depends:    base ^>=4.16.3.0
                     , aeson
                     , bytestring
@@ -52,7 +52,3 @@ library
                     , lens
                     , jose
                     , time
-    hs-source-dirs:   app
-                    , src
-    ghc-options: -Wall -Werror
-    default-language: Haskell2010

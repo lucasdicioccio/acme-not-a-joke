@@ -33,7 +33,7 @@ type AcmePrim a = Nonce -> IO (Maybe a)
 
 -- | An object carrying all functions to generate a single authorization from a
 -- single order with a DNS challenge.
-data Acme = Acme
+data AcmeSingle = AcmeSingle
   { dir                :: Directory
   -- ^ directory for the Server
   , newNonce           :: IO (Maybe Nonce)
@@ -56,22 +56,35 @@ data Acme = Acme
   -- ^ fetch the signed certificate, the URL comes from a OrderInspected (see readOrderInspected)
   }
 
-prepareAcmeOrder :: BaseUrl -> JWK.JWK -> Account "account-fetch" -> CSR -> Order "order-create" -> IO Acme
-prepareAcmeOrder baseurl jwk account csr1 order = do
+data PrepareStep
+  = Starting
+  | GotDirectory Directory
+  | GettingNonce
+  | GotAccount AccountCreated
+  | GotOrder OrderCreated
+  | GotAuthorization AuthorizationInspected
+
+prepareAcmeOrder :: BaseUrl -> JWK.JWK -> Account "account-fetch" -> CSR -> Order "order-create" -> (PrepareStep -> IO ()) -> IO AcmeSingle
+prepareAcmeOrder baseurl jwk account csr1 order handleStep = do
+  handleStep $ Starting
+
   -- unauthenticated info
   acmeDir <- fetchDirectory (directory baseurl)
-  let mknonce = getNonce acmeDir.newNonce
+  let mknonce = handleStep GettingNonce >> getNonce acmeDir.newNonce
+  handleStep $ GotDirectory acmeDir
 
   -- fetch account
   Just nonce1 <- mknonce
   Just accountCreated <- postFetchAccount jwk acmeDir.newAccount nonce1 account
   let (Just nonce2) = responseNonce accountCreated
   let (Just kid) = readKID accountCreated
+  handleStep $ GotAccount accountCreated
 
   -- prepare new order
   Just orderCreated <- postNewOrder jwk acmeDir.newOrder kid nonce2 order
   let (Just nonce3) = responseNonce orderCreated
   let Just authUrl = fmap (head . authorizations) $ readOrderCreated orderCreated
+  handleStep $ GotOrder orderCreated
 
   -- poller for order
   let Just orderUrl = readOrderUrl orderCreated
@@ -80,6 +93,7 @@ prepareAcmeOrder baseurl jwk account csr1 order = do
   -- read authorization's dns challenge 
   let ffetchAuthorization nonce = postGetAuthorization jwk kid nonce authUrl
   Just authorizationInspected <- ffetchAuthorization nonce3
+  handleStep $ GotAuthorization authorizationInspected
   let (Just nonce4) = responseNonce authorizationInspected
   let Just challenge = List.find isDNS01 . challenges =<< readAuthorization authorizationInspected
 
@@ -97,7 +111,7 @@ prepareAcmeOrder baseurl jwk account csr1 order = do
   -- fetch certificate (at last)
   let ffetchCertificate certificateUrl nonce = postGetCertificate jwk kid nonce certificateUrl
 
-  pure $ Acme acmeDir mknonce nonce4 fpollOrder ffetchAuthorization proofVal freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate
+  pure $ AcmeSingle acmeDir mknonce nonce4 fpollOrder ffetchAuthorization proofVal freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate
 
 -- Base URL for Let'sEncrypt staging.
 staging_letsencryptv2 :: BaseUrl

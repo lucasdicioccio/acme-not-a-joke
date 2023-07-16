@@ -3,10 +3,14 @@ set -ex
 cwd=`pwd`
 trap "cd ${cwd}" EXIT
 
-domain=$1
-subj=$2
+# namespace for storage on local files
+environment=$1
+# domain
+domain=$2
+# subject appended to the domain in the CN (common name) field
+subj=$3
 
-dir="production-${domain}"
+dir="${environment}-${domain}"
 mkdir "${dir}"
 cd "${dir}"
 openssl genrsa -out key.pem 4096
