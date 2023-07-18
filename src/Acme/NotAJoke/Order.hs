@@ -212,8 +212,8 @@ readOrderFinalized :: OrderFinalized -> Maybe (Order "order-created")
 readOrderFinalized (OrderFinalized rsp) = decode $ rsp ^. Wreq.responseBody
 
 -- | Finalize an order after completing a challenge.
-postFinalizeOrder :: JWS.JWK -> KID -> Nonce -> Url "finalize-order" -> Finalize -> IO (Maybe OrderFinalized)
-postFinalizeOrder jwk kid nonce finalizeurl finalizeobj = do
+postFinalizeOrder :: JWS.JWK -> KID -> Url "finalize-order" -> Finalize -> Nonce -> IO (Maybe OrderFinalized)
+postFinalizeOrder jwk kid finalizeurl finalizeobj nonce = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
   ebody <- (kidSign jwk ep kid nonce $ encode $ serialized)
   case ebody of

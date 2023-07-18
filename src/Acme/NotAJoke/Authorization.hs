@@ -100,8 +100,8 @@ readAuthorization :: AuthorizationInspected -> Maybe (Authorization "authorizati
 readAuthorization (AuthorizationInspected rsp) = decode $ rsp ^. Wreq.responseBody
 
 -- | Inspects an authorization from its URL.
-postGetAuthorization :: JWS.JWK -> KID -> Nonce -> Url "authorization" -> IO (Maybe AuthorizationInspected)
-postGetAuthorization jwk kid nonce authUrl = do
+postGetAuthorization :: JWS.JWK -> KID -> Url "authorization" -> Nonce -> IO (Maybe AuthorizationInspected)
+postGetAuthorization jwk kid authUrl nonce = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
   ebody <- (kidSign jwk ep kid nonce "")
   case ebody of

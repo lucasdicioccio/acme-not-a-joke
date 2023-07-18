@@ -4,6 +4,7 @@ module Acme.NotAJoke.Client where
 
 import qualified Data.ByteString.Lazy as LBS
 import Data.Aeson (decode)
+import Data.Maybe (fromJust)
 import qualified Data.List as List
 
 import qualified Crypto.JOSE.JWK as JWK
@@ -11,7 +12,7 @@ import qualified Crypto.JOSE.JWK as JWK
 import Acme.NotAJoke.Account
 import Acme.NotAJoke.Directory
 import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Nonce
+import Acme.NotAJoke.Nonce as Nonce
 import Acme.NotAJoke.Order
 import Acme.NotAJoke.Authorization
 import Acme.NotAJoke.Challenge
@@ -29,17 +30,15 @@ doLoadJWK = fmap decode . LBS.readFile
 
 -- | An IO-type for ACME primitives.
 -- As we iterate on this lib, this type may change to become a monad-stack/mtl-mashup.
-type AcmePrim a = Nonce -> IO (Maybe a)
+type AcmePrim a = IO (Maybe a)
 
 -- | An object carrying all functions to generate a single authorization from a
 -- single order with a DNS challenge.
 data AcmeSingle = AcmeSingle
   { dir                :: Directory
   -- ^ directory for the Server
-  , newNonce           :: IO (Maybe Nonce)
-  -- ^ an action to generate a new nonce for this ACME server
-  , unusedNonce        :: Nonce
-  -- ^ the latest unused nonce after initialization (valid only once, hence moderately useful)
+  , nonces             :: Nonce.Fetcher
+  -- ^ an object to generate new nonces for this ACME server, saving found nonces opportunistically
   , pollOrder          :: AcmePrim OrderInspected
   -- ^ fetches the status of an order
   , fetchAuthorization :: AcmePrim AuthorizationInspected
@@ -64,54 +63,58 @@ data PrepareStep
   | GotOrder OrderCreated
   | GotAuthorization AuthorizationInspected
 
+-- TODO:
+-- * step for errors
+-- * specialize isDNS01 lookup
+-- * return shortcuts in handleStep function
 prepareAcmeOrder :: BaseUrl -> JWK.JWK -> Account "account-fetch" -> CSR -> Order "order-create" -> (PrepareStep -> IO ()) -> IO AcmeSingle
 prepareAcmeOrder baseurl jwk account csr1 order handleStep = do
   handleStep $ Starting
 
   -- unauthenticated info
   acmeDir <- fetchDirectory (directory baseurl)
-  let mknonce = handleStep GettingNonce >> getNonce acmeDir.newNonce
+  nf <- fetcher (handleStep GettingNonce >> getNonce acmeDir.newNonce)
+  let mknonce = nf.produce
+  let nonceify = fromJust <$> mknonce
   handleStep $ GotDirectory acmeDir
 
   -- fetch account
-  Just nonce1 <- mknonce
-  Just accountCreated <- postFetchAccount jwk acmeDir.newAccount nonce1 account
-  let (Just nonce2) = responseNonce accountCreated
+  nonce1 <- nonceify
+  Just accountCreated <- saveNonce nf (postFetchAccount jwk acmeDir.newAccount nonce1 account)
   let (Just kid) = readKID accountCreated
   handleStep $ GotAccount accountCreated
 
   -- prepare new order
-  Just orderCreated <- postNewOrder jwk acmeDir.newOrder kid nonce2 order
-  let (Just nonce3) = responseNonce orderCreated
+  nonce2 <- nonceify
+  Just orderCreated <- saveNonce nf (postNewOrder jwk acmeDir.newOrder kid nonce2 order)
   let Just authUrl = fmap (head . authorizations) $ readOrderCreated orderCreated
   handleStep $ GotOrder orderCreated
 
   -- poller for order
   let Just orderUrl = readOrderUrl orderCreated
-  let fpollOrder nonce = postGetOrder jwk orderUrl kid nonce
+  let fpollOrder = saveNonce nf (postGetOrder jwk orderUrl kid =<< nonceify)
 
   -- read authorization's dns challenge 
-  let ffetchAuthorization nonce = postGetAuthorization jwk kid nonce authUrl
-  Just authorizationInspected <- ffetchAuthorization nonce3
+  let ffetchAuthorization = saveNonce nf (postGetAuthorization jwk kid authUrl =<< nonceify)
+  Just authorizationInspected <- ffetchAuthorization
   handleStep $ GotAuthorization authorizationInspected
-  let (Just nonce4) = responseNonce authorizationInspected
   let Just challenge = List.find isDNS01 . challenges =<< readAuthorization authorizationInspected
 
   -- challenge validation proof
   let proofVal = sha256digest (keyAuthorization (token challenge) jwk)
 
   -- read authorization's dns challenge 
-  let freplyChallenge nonce = postReplyChallenge jwk kid nonce challenge
-  let fpollChallenge nonce = postGetChallenge jwk kid nonce challenge
+  let freplyChallenge = saveNonce nf (postReplyChallenge jwk kid challenge =<< nonceify)
+  let fpollChallenge = saveNonce nf (postGetChallenge jwk kid challenge =<< nonceify)
 
   -- finalize order
   let Just finalizeOrderUrl = fmap finalize $ readOrderCreated orderCreated
-  let ffinalizeOrder nonce = postFinalizeOrder jwk kid nonce finalizeOrderUrl (Finalize csr1)
+  let ffinalizeOrder = saveNonce nf (postFinalizeOrder jwk kid finalizeOrderUrl (Finalize csr1) =<< nonceify)
 
   -- fetch certificate (at last)
-  let ffetchCertificate certificateUrl nonce = postGetCertificate jwk kid nonce certificateUrl
+  let ffetchCertificate certificateUrl = saveNonce nf (postGetCertificate jwk kid certificateUrl =<< nonceify)
 
-  pure $ AcmeSingle acmeDir mknonce nonce4 fpollOrder ffetchAuthorization proofVal freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate
+  pure $ AcmeSingle acmeDir nf fpollOrder ffetchAuthorization proofVal freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate
 
 -- Base URL for Let'sEncrypt staging.
 staging_letsencryptv2 :: BaseUrl

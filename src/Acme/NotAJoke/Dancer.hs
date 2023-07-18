@@ -8,7 +8,6 @@ import Control.Concurrent (threadDelay)
 
 import Acme.NotAJoke.Account
 import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Nonce
 import Acme.NotAJoke.Order
 import Acme.NotAJoke.CSR
 import Acme.NotAJoke.Certificate
@@ -35,8 +34,8 @@ data DanceStep
   | Done AcmeSingle Certificate
   | Prepare PrepareStep
 
-basicDance :: DanceStep -> IO ()
-basicDance x =
+basicDance :: FilePath -> DanceStep -> IO ()
+basicDance certPath x =
   case x of
     Validation p -> do
       print ("proof is" :: Text, showProof p, "press enter to continue" :: Text)
@@ -49,6 +48,7 @@ basicDance x =
       print ("waiting" :: Text, n)
       threadDelay $ n * 1000000
     Done _ cert -> do
+      storeCert certPath cert
       print cert
     InvalidOrder o -> do
       print ("order invalid" :: Text, o)
@@ -74,25 +74,19 @@ runAcmeDance dancer = do
   where
     go acme = do
       dancer.handleStep $ Validation (proof acme)
-      _ <- notifyServer acme
+      _ <- acme.replyChallenge
       waitForValidOrder 0 acme
 
     handleAcmeSingleStep = dancer.handleStep . Prepare
 
-    nonceify :: AcmeSingle -> IO Nonce
-    nonceify acme = fromJust <$> acme.newNonce
-
-    notifyServer acme = do
-      acme.replyChallenge =<< nonceify acme
-
     waitForValidOrder n acme = do
       dancer.handleStep (WaitingForValidation n)
-      recentOrder <- fromJust <$> (pollOrder acme =<< nonceify acme)
+      recentOrder <- fromJust <$> acme.pollOrder
       case Acme.NotAJoke.Order.status <$> readOrderInspected recentOrder of
         Just OrderPending -> waitForValidOrder (succ n) acme
         Just OrderProcessing -> waitForValidOrder (succ n) acme
         Just OrderReady -> do
-          x <- fromJust <$> (acme.finalizeOrder =<< nonceify acme)
+          x <- fromJust <$> acme.finalizeOrder
           dancer.handleStep $ OrderIsFinalized x
           waitForValidOrder (succ n) acme
         Just OrderValid -> handleValid acme recentOrder
@@ -102,7 +96,7 @@ runAcmeDance dancer = do
     handleValid acme o = do
       dancer.handleStep $ ValidOrder o
       let certUrl = certificate =<< (readOrderInspected o)
-      certif <- acme.fetchCertificate (fromJust certUrl) =<< nonceify acme
+      certif <- acme.fetchCertificate (fromJust certUrl)
       dancer.handleStep $ Done acme (fromJust certif)
 
 showProof :: ValidationProof -> String

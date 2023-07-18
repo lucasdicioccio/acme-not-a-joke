@@ -3,6 +3,7 @@ module Acme.NotAJoke.Certificate where
 
 import Data.Coerce (coerce)
 import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Lazy as ByteString
 import Data.Aeson (encode)
 import qualified Network.Wreq as Wreq
 import Control.Lens hiding ((.=))
@@ -23,13 +24,16 @@ newtype Certificate = Certificate (Wreq.Response ByteString)
 -- | A PEM-file representation of a certificate.
 newtype PEM = PEM ByteString
 
+storeCert :: FilePath -> Certificate -> IO ()
+storeCert path cert = ByteString.writeFile path (coerce $ readPEM cert)
+
 -- | Lookup a PEM from a certificate.
 readPEM :: Certificate -> PEM
 readPEM (Certificate rsp) = PEM $ rsp ^. Wreq.responseBody
 
 -- | Retrieves a certificate from an URL.
-postGetCertificate :: JWS.JWK -> KID -> Nonce -> Url "certificate" -> IO (Maybe Certificate)
-postGetCertificate jwk kid nonce certificateUrl = do
+postGetCertificate :: JWS.JWK -> KID -> Url "certificate" -> Nonce -> IO (Maybe Certificate)
+postGetCertificate jwk kid certificateUrl nonce = do
   let opts = Wreq.defaults
                & Wreq.header "Content-Type" .~ ["application/jose+json"]
                & Wreq.header "Accept" .~ ["application/pem-certificate-chain"]

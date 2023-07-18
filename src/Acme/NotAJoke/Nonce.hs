@@ -9,6 +9,7 @@
 -- This module provide helpers to deal with this requirement.
 module Acme.NotAJoke.Nonce where
 
+import Data.IORef (newIORef, atomicModifyIORef, writeIORef)
 import Data.Coerce (coerce, Coercible)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Encoding
@@ -37,3 +38,31 @@ responseNonceWreqBS = responseNonceWreq
 
 responseNonce :: forall a. Coercible a (Wreq.Response ByteString) => a -> Maybe Nonce
 responseNonce = responseNonceWreqBS . coerce
+
+
+data Fetcher = Fetcher {
+    produce :: IO (Maybe Nonce)
+  , set :: Nonce -> IO ()
+  , fetchNewNonce :: IO (Maybe Nonce)
+  }
+
+fetcher :: IO (Maybe Nonce) -> IO Fetcher
+fetcher fetch = do
+    ref <- newIORef Nothing
+    pure $ Fetcher (go ref) (writeIORef ref . Just) fetch
+  where
+    go ref = do
+      val <- atomicModifyIORef ref (\x -> (Nothing,x))
+      case val of
+        Nothing -> fetch
+        (Just x) -> pure (Just x)
+
+saveResponseNonce :: forall a. Coercible a (Wreq.Response ByteString) => Fetcher -> a -> IO ()
+saveResponseNonce nonceFetcher rsp =
+  maybe (pure ()) (nonceFetcher.set) (responseNonce rsp)
+
+saveNonce :: forall a. Coercible a (Wreq.Response ByteString) => Fetcher -> IO (Maybe a) -> IO (Maybe a)
+saveNonce nonceFetcher apiCall = do
+  obj <- apiCall
+  maybe (pure ()) (saveResponseNonce nonceFetcher) obj
+  pure obj

@@ -97,8 +97,8 @@ newtype ChallengeAttempted = ChallengeAttempted (Wreq.Response ByteString)
 -- | Notify the ACME server that you are ready to reply a challenge.
 -- 
 -- For instance, after installing the required DNS-records.
-postReplyChallenge :: JWS.JWK -> KID -> Nonce -> Challenge a -> IO (Maybe ChallengeAttempted)
-postReplyChallenge jwk kid nonce challenge = do
+postReplyChallenge :: JWS.JWK -> KID -> Challenge a -> Nonce -> IO (Maybe ChallengeAttempted)
+postReplyChallenge jwk kid challenge nonce = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
   ebody <- (kidSign jwk ep kid nonce $ encode emptyObject)
   case ebody of
@@ -113,8 +113,8 @@ postReplyChallenge jwk kid nonce challenge = do
     ep = coerce (challenge.url)
 
 -- | Query the ACME server about the status of a given challenge.
-postGetChallenge :: JWS.JWK -> KID -> Nonce -> Challenge a -> IO (Maybe ChallengeAttempted)
-postGetChallenge jwk kid nonce challenge = do
+postGetChallenge :: JWS.JWK -> KID -> Challenge a -> Nonce -> IO (Maybe ChallengeAttempted)
+postGetChallenge jwk kid challenge nonce = do
   let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
   ebody <- (kidSign jwk ep kid nonce "")
   case ebody of
