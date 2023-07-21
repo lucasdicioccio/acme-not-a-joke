@@ -1,4 +1,4 @@
-module Acme.NotAJoke.Account where
+module Acme.NotAJoke.Api.Account where
 
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Encoding
@@ -9,10 +9,10 @@ import Control.Lens hiding ((.=))
 
 import qualified Crypto.JOSE.JWS as JWS
 
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Field
-import Acme.NotAJoke.Nonce
-import Acme.NotAJoke.JWS
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Field
+import Acme.NotAJoke.Api.Nonce
+import Acme.NotAJoke.Api.JWS
 
 -- | The contact-field of an account (something like `mailto:certmaster@example.com`)
 type Contact = Text

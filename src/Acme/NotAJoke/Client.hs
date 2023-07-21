@@ -2,31 +2,21 @@
 
 module Acme.NotAJoke.Client where
 
-import qualified Data.ByteString.Lazy as LBS
-import Data.Aeson (decode)
 import Data.Maybe (fromJust)
 import qualified Data.List as List
 
 import qualified Crypto.JOSE.JWK as JWK
 
-import Acme.NotAJoke.Account
-import Acme.NotAJoke.Directory
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Nonce as Nonce
-import Acme.NotAJoke.Order
-import Acme.NotAJoke.Authorization
-import Acme.NotAJoke.Challenge
-import Acme.NotAJoke.CSR
-import Acme.NotAJoke.Certificate
-import Acme.NotAJoke.Validation
-
--- | Generates and RSA-4096 bits key.
-doGenJWK :: IO JWK.JWK
-doGenJWK = JWK.genJWK (JWK.RSAGenParam (4096 `div` 8))
-
--- | Loads a JWK from a file.
-doLoadJWK :: FilePath -> IO (Maybe JWK.JWK)
-doLoadJWK = fmap decode . LBS.readFile
+import Acme.NotAJoke.Api.Account
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Nonce as Nonce
+import Acme.NotAJoke.Api.Order
+import Acme.NotAJoke.Api.Authorization
+import Acme.NotAJoke.Api.Challenge
+import Acme.NotAJoke.Api.CSR
+import Acme.NotAJoke.Api.Certificate
+import Acme.NotAJoke.Api.Validation
 
 -- | An IO-type for ACME primitives.
 -- As we iterate on this lib, this type may change to become a monad-stack/mtl-mashup.
@@ -115,11 +105,3 @@ prepareAcmeOrder baseurl jwk account csr1 order handleStep = do
   let ffetchCertificate certificateUrl = saveNonce nf (postGetCertificate jwk kid certificateUrl =<< nonceify)
 
   pure $ AcmeSingle acmeDir nf fpollOrder ffetchAuthorization proofVal freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate
-
--- Base URL for Let'sEncrypt staging.
-staging_letsencryptv2 :: BaseUrl
-staging_letsencryptv2 = "https://acme-staging-v02.api.letsencrypt.org/"
-
--- Base URL for Let'sEncrypt production.
-letsencryptv2 :: BaseUrl
-letsencryptv2 = "https://acme-v02.api.letsencrypt.org/"

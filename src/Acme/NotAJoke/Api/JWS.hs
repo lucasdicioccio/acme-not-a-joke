@@ -2,7 +2,7 @@
 --- | Helpers to work with JSON Web Signatures for ACME.
 -- Indeed, almost all ACME API calls are signed with a KID or a JWK and
 -- transferred using the JWS format. Thus, some internal helpers are welcome.
-module Acme.NotAJoke.JWS where
+module Acme.NotAJoke.Api.JWS where
 
 import Control.Applicative ((<|>))
 import Control.Exception (Exception, throwIO)
@@ -15,8 +15,8 @@ import Control.Lens hiding ((.=))
 import qualified Crypto.JOSE.JWS as JWS
 import qualified Crypto.JOSE.JWK as JWK
 
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Nonce
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Nonce
 
 
 newtype PublicJWK = PublicJWK JWK.JWK

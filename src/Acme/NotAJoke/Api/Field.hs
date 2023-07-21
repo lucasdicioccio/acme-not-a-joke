@@ -1,4 +1,4 @@
-module Acme.NotAJoke.Field where
+module Acme.NotAJoke.Api.Field where
 
 import GHC.TypeLits (Symbol)
 

@@ -1,4 +1,4 @@
-module Acme.NotAJoke.Order where
+module Acme.NotAJoke.Api.Order where
 
 import Data.Coerce (coerce)
 import Data.Text (Text)
@@ -12,11 +12,11 @@ import Data.Maybe (catMaybes)
 
 import qualified Crypto.JOSE.JWS as JWS
 
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Field
-import Acme.NotAJoke.Nonce
-import Acme.NotAJoke.JWS
-import Acme.NotAJoke.CSR
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Field
+import Acme.NotAJoke.Api.Nonce
+import Acme.NotAJoke.Api.JWS
+import Acme.NotAJoke.Api.CSR
 
 -- | RFC-defined order statuses.
 data OrderStatus

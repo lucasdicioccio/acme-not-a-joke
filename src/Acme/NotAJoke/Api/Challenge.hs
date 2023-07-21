@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
-module Acme.NotAJoke.Challenge where
+module Acme.NotAJoke.Api.Challenge where
 
 import Data.Coerce (coerce)
 import Data.Text (Text)
@@ -12,10 +12,10 @@ import Data.Time.Clock (UTCTime)
 
 import qualified Crypto.JOSE.JWS as JWS
 
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Field
-import Acme.NotAJoke.Nonce
-import Acme.NotAJoke.JWS
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Field
+import Acme.NotAJoke.Api.Nonce
+import Acme.NotAJoke.Api.JWS
 
 -- | RFC-defined Challenge types.
 data ChallengeType

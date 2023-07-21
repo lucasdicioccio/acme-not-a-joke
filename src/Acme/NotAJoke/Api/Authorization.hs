@@ -1,4 +1,4 @@
-module Acme.NotAJoke.Authorization where
+module Acme.NotAJoke.Api.Authorization where
 
 import Data.Coerce (coerce)
 import Data.Text (Text)
@@ -10,11 +10,11 @@ import Data.Time.Clock (UTCTime)
 
 import qualified Crypto.JOSE.JWS as JWS
 
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Field
-import Acme.NotAJoke.Nonce
-import Acme.NotAJoke.JWS
-import Acme.NotAJoke.Challenge
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Field
+import Acme.NotAJoke.Api.Nonce
+import Acme.NotAJoke.Api.JWS
+import Acme.NotAJoke.Api.Challenge
 
 -- RFC-defined authorization statuses.
 data AuthorizationStatus

@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Acme.NotAJoke.Endpoint where
+module Acme.NotAJoke.Api.Endpoint where
 
 import GHC.TypeLits
 import Data.Coerce (coerce)

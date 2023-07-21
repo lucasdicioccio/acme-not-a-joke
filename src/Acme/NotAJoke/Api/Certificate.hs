@@ -1,5 +1,5 @@
 
-module Acme.NotAJoke.Certificate where
+module Acme.NotAJoke.Api.Certificate where
 
 import Data.Coerce (coerce)
 import Data.ByteString.Lazy (ByteString)
@@ -10,9 +10,9 @@ import Control.Lens hiding ((.=))
 
 import qualified Crypto.JOSE.JWS as JWS
 
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Nonce
-import Acme.NotAJoke.JWS
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Nonce
+import Acme.NotAJoke.Api.JWS
 
 -- | The goal of the whole ACME dance is to retrieve such Certificate.
 --

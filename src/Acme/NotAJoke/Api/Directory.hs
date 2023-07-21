@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-module Acme.NotAJoke.Directory where
+module Acme.NotAJoke.Api.Directory where
 
 import GHC.Generics (Generic)
 import Data.Coerce (coerce)
@@ -7,8 +7,8 @@ import Data.Aeson (FromJSON(..))
 import qualified Network.Wreq as Wreq
 import Control.Lens hiding ((.=))
 
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Meta
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Meta
 
 -- | RFC-defined directory structure.
 -- 

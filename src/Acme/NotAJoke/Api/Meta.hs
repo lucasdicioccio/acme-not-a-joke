@@ -1,11 +1,11 @@
 {-# LANGUAGE DeriveGeneric #-}
-module Acme.NotAJoke.Meta where
+module Acme.NotAJoke.Api.Meta where
 
 import GHC.Generics (Generic)
 import Data.Text (Text)
 import Data.Aeson (FromJSON(..))
 
-import Acme.NotAJoke.Endpoint (Url)
+import Acme.NotAJoke.Api.Endpoint (Url)
 
 type CAAIdentity = Text
 

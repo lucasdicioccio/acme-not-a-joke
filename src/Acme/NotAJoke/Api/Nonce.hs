@@ -7,7 +7,7 @@
 -- Most API Calls return a Nonce for the next request.
 -- Client should re-use these Nonce to avoid overloading the server.
 -- This module provide helpers to deal with this requirement.
-module Acme.NotAJoke.Nonce where
+module Acme.NotAJoke.Api.Nonce where
 
 import Data.IORef (newIORef, atomicModifyIORef, writeIORef)
 import Data.Coerce (coerce, Coercible)
@@ -18,7 +18,7 @@ import Data.Aeson (FromJSON(..), ToJSON(..))
 import qualified Network.Wreq as Wreq
 import Control.Lens hiding ((.=))
 
-import Acme.NotAJoke.Endpoint
+import Acme.NotAJoke.Api.Endpoint
 
 newtype Nonce = Nonce Text
   deriving (Show, FromJSON, ToJSON)

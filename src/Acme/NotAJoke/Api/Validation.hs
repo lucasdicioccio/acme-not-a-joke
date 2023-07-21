@@ -1,5 +1,5 @@
 -- | Helper to build a ValidationProof out of some token
-module Acme.NotAJoke.Validation where
+module Acme.NotAJoke.Api.Validation where
 
 import Data.Coerce (coerce)
 import Data.Text (Text)
@@ -8,7 +8,7 @@ import Control.Lens hiding ((.=))
 
 import qualified Crypto.JOSE.JWK as JWK
 
-import Acme.NotAJoke.Challenge
+import Acme.NotAJoke.Api.Challenge
 
 -- | RFC-defined key authorizations.
 newtype KeyAuthorization = KeyAuthorization Text

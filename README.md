@@ -31,11 +31,12 @@ create a new account
 
 ```hs
 import Acme.NotAJoke.Client
-import Acme.NotAJoke.Directory
-
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.LetsEncrypt
 import Data.Maybe
 
-loadedjwk <- doLoadJWK "staging/key.jwk"
+loadedjwk <- loadJWKFile "staging/key.jwk"
 let jwk = fromJust loadedjwk
 let contacts = ["mailto:certmaster@dicioccio.fr"]
 
@@ -47,26 +48,27 @@ postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
 create a new cert
 
 ```hs
+import Acme.NotAJoke.CertManagement
 import Acme.NotAJoke.Client
 import Acme.NotAJoke.Dancer
-import Acme.NotAJoke.Directory
-import Acme.NotAJoke.CSR
-import Acme.NotAJoke.Order
-
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.CSR
+import Acme.NotAJoke.Api.Order
+import Acme.NotAJoke.LetsEncrypt
 import Data.Maybe
 
-jwk <- fromJust <$> doLoadJWK "staging/key.jwk"
-der <- doLoadDER "staging-example/certificate.csr.der"
+jwk <- fromJust <$> loadJWKFile "staging/key.jwk"
+der <- loadDER "staging-example/certificate.csr.der"
 
 let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicioccio.fr" ]
-runAcmeDance (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (basicDance "example.dicioccio.fr-certificate.pem"))
+runAcmeDance (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (basicDance "staging-example/certificate.pem"))
 ```
 
 
 ## todo list
 
 - tweak supported algos
-- more functions to save/load jwk/pem
 - remove usage of wreq or catch exceptions somehow
 - some more doc
 - keyChange

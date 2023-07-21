@@ -6,12 +6,12 @@ import Data.Text (Text)
 import qualified Crypto.JOSE.JWK as JWK
 import Control.Concurrent (threadDelay)
 
-import Acme.NotAJoke.Account
-import Acme.NotAJoke.Endpoint
-import Acme.NotAJoke.Order
-import Acme.NotAJoke.CSR
-import Acme.NotAJoke.Certificate
-import Acme.NotAJoke.Validation
+import Acme.NotAJoke.Api.Account
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Order
+import Acme.NotAJoke.Api.CSR
+import Acme.NotAJoke.Api.Certificate
+import Acme.NotAJoke.Api.Validation
 import Acme.NotAJoke.Client
 
 data AcmeDancer =
@@ -82,7 +82,7 @@ runAcmeDance dancer = do
     waitForValidOrder n acme = do
       dancer.handleStep (WaitingForValidation n)
       recentOrder <- fromJust <$> acme.pollOrder
-      case Acme.NotAJoke.Order.status <$> readOrderInspected recentOrder of
+      case Acme.NotAJoke.Api.Order.status <$> readOrderInspected recentOrder of
         Just OrderPending -> waitForValidOrder (succ n) acme
         Just OrderProcessing -> waitForValidOrder (succ n) acme
         Just OrderReady -> do
