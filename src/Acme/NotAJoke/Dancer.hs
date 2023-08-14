@@ -73,7 +73,7 @@ runAcmeDance dancer = do
     go acme
   where
     go acme = do
-      dancer.handleStep $ Validation (proof acme)
+      dancer.handleStep $ Validation acme.proof
       _ <- acme.replyChallenge
       waitForValidOrder 0 acme
 
