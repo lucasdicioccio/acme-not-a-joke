@@ -10,6 +10,7 @@ import Acme.NotAJoke.Api.Account
 import Acme.NotAJoke.Api.Endpoint
 import Acme.NotAJoke.Api.Order
 import Acme.NotAJoke.Api.CSR
+import Acme.NotAJoke.Api.Challenge (isDNS01, Token(..))
 import Acme.NotAJoke.Api.Certificate
 import Acme.NotAJoke.Api.Validation
 import Acme.NotAJoke.Client
@@ -25,7 +26,7 @@ data AcmeDancer =
   }
 
 data DanceStep
-  = Validation ValidationProof
+  = Validation (Token, KeyAuthorization, ValidationProof)
   | WaitingForValidation Int
   | OrderIsFinalized OrderFinalized
   | ValidOrder OrderInspected
@@ -34,42 +35,19 @@ data DanceStep
   | Done AcmeSingle Certificate
   | Prepare PrepareStep
 
-basicDance :: FilePath -> DanceStep -> IO ()
-basicDance certPath x =
-  case x of
-    Validation p -> do
-      print ("proof is" :: Text, showProof p, "press enter to continue" :: Text)
-      void getLine
-    OrderIsFinalized o -> do
-      print ("finalized" :: Text, o)
-    ValidOrder o -> do
-      print ("order valid" :: Text, o)
-    WaitingForValidation n -> do
-      print ("waiting" :: Text, n)
-      threadDelay $ n * 1000000
-    Done _ cert -> do
-      storeCert certPath cert
-      print cert
-    InvalidOrder o -> do
-      print ("order invalid" :: Text, o)
-    OtherError txt -> do
-      print ("order invalid" :: Text, txt)
-    Prepare Starting -> do
-      print ("starting" :: Text)
-    Prepare GettingNonce -> do
-      print ("getting-nonce" :: Text)
-    Prepare (GotDirectory d) -> do
-      print ("listed directory" :: Text, d)
-    Prepare (GotAccount a) -> do
-      print ("got account" :: Text, a)
-    Prepare (GotOrder o) -> do
-      print ("got order" :: Text, o)
-    Prepare (GotAuthorization a) -> do
-      print ("got authorization" :: Text, a)
+runAcmeDance_dns01 :: AcmeDancer -> IO ()
+runAcmeDance_dns01 = runAcmeDance isDNS01
 
-runAcmeDance :: AcmeDancer -> IO ()
-runAcmeDance dancer = do
-    acme <- prepareAcmeOrder dancer.baseUrl dancer.accountJwk dancer.account dancer.csr dancer.order handleAcmeSingleStep
+runAcmeDance :: MatchChallenge -> AcmeDancer -> IO ()
+runAcmeDance matchChallenge dancer = do
+    acme <- prepareAcmeOrder
+              dancer.baseUrl
+              dancer.accountJwk
+              dancer.account
+              dancer.csr
+              dancer.order
+              matchChallenge
+              handleAcmeSingleStep
     go acme
   where
     go acme = do
@@ -99,5 +77,49 @@ runAcmeDance dancer = do
       certif <- acme.fetchCertificate (fromJust certUrl)
       dancer.handleStep $ Done acme (fromJust certif)
 
-showProof :: ValidationProof -> String
-showProof (ValidationProof x1) = show x1
+-- | A dance for running from within GHCI (i.e., printing and expecting you to
+-- press ENTER to continue).
+ghciDance :: FilePath -> DanceStep -> IO ()
+ghciDance certPath x =
+  case x of
+    Validation (tok,keyAuth,sha) -> do
+      print ("token (http01) is" :: Text, showToken tok)
+      print ("key authorization (http01) is" :: Text, showKeyAuth keyAuth)
+      print ("sha256 (dns01) is" :: Text, showProof sha)
+      print ("press enter to continue" :: Text)
+      void getLine
+    OrderIsFinalized o -> do
+      print ("finalized" :: Text, o)
+    ValidOrder o -> do
+      print ("order valid" :: Text, o)
+    WaitingForValidation n -> do
+      print ("waiting" :: Text, n)
+      threadDelay $ n * 1000000
+    Done _ cert -> do
+      storeCert certPath cert
+      print cert
+    InvalidOrder o -> do
+      print ("order invalid" :: Text, o)
+    OtherError txt -> do
+      print ("order invalid" :: Text, txt)
+    Prepare Starting -> do
+      print ("starting" :: Text)
+    Prepare GettingNonce -> do
+      print ("getting-nonce" :: Text)
+    Prepare (GotDirectory d) -> do
+      print ("listed directory" :: Text, d)
+    Prepare (GotAccount a) -> do
+      print ("got account" :: Text, a)
+    Prepare (GotOrder o) -> do
+      print ("got order" :: Text, o)
+    Prepare (GotAuthorization a) -> do
+      print ("got authorization" :: Text, a)
+
+showToken :: Token -> Text
+showToken (Token x1) = x1
+
+showKeyAuth :: KeyAuthorization -> Text
+showKeyAuth (KeyAuthorization x1) = x1
+
+showProof :: ValidationProof -> Text
+showProof (ValidationProof x1) = x1

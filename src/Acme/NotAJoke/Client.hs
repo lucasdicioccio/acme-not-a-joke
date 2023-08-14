@@ -33,7 +33,7 @@ data AcmeSingle = AcmeSingle
   -- ^ fetches the status of an order
   , fetchAuthorization :: AcmePrim AuthorizationInspected
   -- ^ fetches the authorization, this function is called by prepareAcmeOrder so you may not need to inspect authorization yourself
-  , proof              :: ValidationProof
+  , proof              :: (Token, KeyAuthorization, ValidationProof)
   -- ^ the validation proof (i.e., the value to set in DNS records and so on)
   , replyChallenge     :: AcmePrim ChallengeAttempted
   -- ^ tells the server it can validates the challenge (i.e., after writing the proof in some DNS record)
@@ -53,12 +53,21 @@ data PrepareStep
   | GotOrder OrderCreated
   | GotAuthorization AuthorizationInspected
 
+type MatchChallenge = Challenge "challenge-unspecified" -> Bool
+
 -- TODO:
 -- * step for errors
--- * specialize isDNS01 lookup
 -- * return shortcuts in handleStep function
-prepareAcmeOrder :: BaseUrl -> JWK.JWK -> Account "account-fetch" -> CSR -> Order "order-create" -> (PrepareStep -> IO ()) -> IO AcmeSingle
-prepareAcmeOrder baseurl jwk account csr1 order handleStep = do
+prepareAcmeOrder
+  :: BaseUrl
+  -> JWK.JWK
+  -> Account "account-fetch"
+  -> CSR
+  -> Order "order-create"
+  -> MatchChallenge
+  -> (PrepareStep -> IO ())
+  -> IO AcmeSingle
+prepareAcmeOrder baseurl jwk account csr1 order matchChallenge handleStep = do
   handleStep $ Starting
 
   -- unauthenticated info
@@ -88,10 +97,12 @@ prepareAcmeOrder baseurl jwk account csr1 order handleStep = do
   let ffetchAuthorization = saveNonce nf (postGetAuthorization jwk kid authUrl =<< nonceify)
   Just authorizationInspected <- ffetchAuthorization
   handleStep $ GotAuthorization authorizationInspected
-  let Just challenge = List.find isDNS01 . challenges =<< readAuthorization authorizationInspected
+  let Just challenge = List.find matchChallenge . challenges =<< readAuthorization authorizationInspected
 
   -- challenge validation proof
-  let proofVal = sha256digest (keyAuthorization (token challenge) jwk)
+  let tok = challenge.token
+  let keyAuth  = keyAuthorization tok jwk
+  let proofVal = sha256digest keyAuth
 
   -- read authorization's dns challenge 
   let freplyChallenge = saveNonce nf (postReplyChallenge jwk kid challenge =<< nonceify)
@@ -104,4 +115,4 @@ prepareAcmeOrder baseurl jwk account csr1 order handleStep = do
   -- fetch certificate (at last)
   let ffetchCertificate certificateUrl = saveNonce nf (postGetCertificate jwk kid certificateUrl =<< nonceify)
 
-  pure $ AcmeSingle acmeDir nf fpollOrder ffetchAuthorization proofVal freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate
+  pure $ AcmeSingle acmeDir nf fpollOrder ffetchAuthorization (tok, keyAuth, proofVal) freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate

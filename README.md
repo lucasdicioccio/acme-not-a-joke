@@ -62,7 +62,7 @@ jwk <- fromJust <$> loadJWKFile "staging/key.jwk"
 der <- loadDER "staging-example/certificate.csr.der"
 
 let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicioccio.fr" ]
-runAcmeDance (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (basicDance "staging-example/certificate.pem"))
+runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (ghciDance "staging-example/certificate.pem"))
 ```
 
 
