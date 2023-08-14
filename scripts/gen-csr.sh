@@ -9,15 +9,24 @@ environment=$1
 domain=$2
 # subject appended to the domain in the CN (common name) field
 subj=$3
+# iteration
+iteration=$4
+
+csrfile="certificate.${iteration}.csr"
 
 dir="${environment}-${domain}"
-mkdir "${dir}"
+mkdir -p "${dir}"
 cd "${dir}"
-openssl genrsa -out key.pem 4096
+
+if [ ! -e "key.pem" ]
+then
+  openssl genrsa -out key.pem 4096
+fi
+
 if [ -z "${subj}" ]
 then
-  openssl req -new -sha256 -key key.pem -out certificate.csr
+  openssl req -new -sha256 -key key.pem -out "${csrfile}"
 else
-  openssl req -new -sha256 -key key.pem -subj "/CN=${domain}.${subj}" -out certificate.csr
+  openssl req -new -sha256 -key key.pem -subj "/CN=${domain}.${subj}" -out "${csrfile}"
 fi
-openssl req -in certificate.csr -outform DER -out certificate.csr.der
+openssl req -in "${csrfile}" -outform DER -out "${csrfile}.der"
