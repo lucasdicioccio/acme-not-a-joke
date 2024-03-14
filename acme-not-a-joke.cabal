@@ -45,7 +45,7 @@ library
       Acme.NotAJoke.LetsEncrypt
       Acme.NotAJoke.KeyManagement
       Acme.NotAJoke.CertManagement
-    build-depends:    base ^>=4.16.3.0
+    build-depends:    base >=4.16.3.0
                     , aeson
                     , bytestring
                     , text
