@@ -1,25 +1,25 @@
-
 module Acme.NotAJoke.Api.Certificate where
 
-import Data.Coerce (coerce)
+import Control.Lens hiding ((.=))
+import Data.Aeson (encode)
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as ByteString
-import Data.Aeson (encode)
+import Data.Coerce (coerce)
 import qualified Network.Wreq as Wreq
-import Control.Lens hiding ((.=))
 
 import qualified Crypto.JOSE.JWS as JWS
 
 import Acme.NotAJoke.Api.Endpoint
-import Acme.NotAJoke.Api.Nonce
 import Acme.NotAJoke.Api.JWS
+import Acme.NotAJoke.Api.Nonce
 
--- | The goal of the whole ACME dance is to retrieve such Certificate.
---
--- You should be able to figure out most of the ACME flow by looking how you
--- build a Certificate and pulling all the dependencies.
+{- | The goal of the whole ACME dance is to retrieve such Certificate.
+
+You should be able to figure out most of the ACME flow by looking how you
+build a Certificate and pulling all the dependencies.
+-}
 newtype Certificate = Certificate (Wreq.Response ByteString)
-  deriving (Show)
+    deriving (Show)
 
 -- | A PEM-file representation of a certificate.
 newtype PEM = PEM ByteString
@@ -34,17 +34,18 @@ readPEM (Certificate rsp) = PEM $ rsp ^. Wreq.responseBody
 -- | Retrieves a certificate from an URL.
 postGetCertificate :: JWS.JWK -> KID -> Url "certificate" -> Nonce -> IO (Maybe Certificate)
 postGetCertificate jwk kid certificateUrl nonce = do
-  let opts = Wreq.defaults
-               & Wreq.header "Content-Type" .~ ["application/jose+json"]
-               & Wreq.header "Accept" .~ ["application/pem-certificate-chain"]
-  ebody <- (kidSign jwk ep kid nonce "")
-  case ebody of
-    Right body -> do
-      e <- Wreq.postWith opts (wrequrl ep) $ encode body
-      pure $ Just $ Certificate e
-    Left err -> do
-      print err
-      pure Nothing
+    let opts =
+            Wreq.defaults
+                & Wreq.header "Content-Type" .~ ["application/jose+json"]
+                & Wreq.header "Accept" .~ ["application/pem-certificate-chain"]
+    ebody <- (kidSign jwk ep kid nonce "")
+    case ebody of
+        Right body -> do
+            e <- Wreq.postWith opts (wrequrl ep) $ encode body
+            pure $ Just $ Certificate e
+        Left err -> do
+            print err
+            pure Nothing
   where
     ep :: Endpoint "certificate"
     ep = coerce certificateUrl

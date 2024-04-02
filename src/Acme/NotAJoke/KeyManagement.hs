@@ -1,7 +1,7 @@
 module Acme.NotAJoke.KeyManagement where
 
-import qualified Data.ByteString.Lazy as LBS
 import Data.Aeson (decode, encode)
+import qualified Data.ByteString.Lazy as LBS
 
 import qualified Crypto.JOSE.JWK as JWK
 
