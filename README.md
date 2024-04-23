@@ -6,11 +6,13 @@ A library of primitives to perform ACME authentication certifications [RFC-8555]
 
 Incomplete and subject to changes. But the happy path will work.
 
-What I'd like to change:
-- no longer use `wreq` (it returns non-200 with exception)
-- support more features
+What I'd like to change with low appetite:
+- support more features (especially, revocations)
 - allow to tweak algos (works for RS256 only)
 - better helpers to create/load/write various PKI-related formats
+
+What I'd like to change with low appetite:
+- no longer use `wreq` (it returns non-200 with exception)
 
 Design-wise, the library uses a TypeFamily pattern to specify/modulate which
 fields are available for ACME resources in various APIs/states (e.g., an
@@ -69,7 +71,6 @@ runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:
 ## todo list
 
 - tweak supported algos
-- remove usage of wreq or catch exceptions somehow
 - some more doc
 - keyChange
 - deactivate account
