@@ -6,19 +6,19 @@ version:            0.1.0.0
 synopsis: implements ACME clients (rfc-8555)
 
 -- A longer description of the package.
--- description:
+description: a library to get TLS certificate by communicating to a ACME-provider such as Lets'Encrypt. Hence: no, the acme prefix is not a marker for a joke.
 
 -- A URL where users can report bugs.
 -- bug-reports:
 
 -- The license under which the package is released.
--- license:
+license: BSD-3-Clause
 author:             Lucas DiCioccio
 maintainer:         lucas@dicioccio.fr
 
 -- A copyright notice.
 copyright: Lucas DiCioccio 2023
--- category:
+category: Security
 extra-source-files: CHANGELOG.md
 
 library
@@ -45,14 +45,15 @@ library
       Acme.NotAJoke.LetsEncrypt
       Acme.NotAJoke.KeyManagement
       Acme.NotAJoke.CertManagement
-    build-depends:    base >=4.16.3.0
-                    , aeson
-                    , bytestring
-                    , text
-                    , cryptohash-sha256
-                    , base16-bytestring
-                    , wreq
-                    , lens
-                    , jose
-                    , time
-                    , filepath
+    build-depends:
+      aeson >= 2.2.1 && < 2.3,
+      base >= 4.19.1 && < 4.20,
+      bytestring >= 0.12.1 && < 0.13,
+      filepath >= 1.4.200 && < 1.5,
+      text >= 2.1.1 && < 2.2,
+      time >= 1.12.2 && < 1.13,
+      base16-bytestring >= 1.0.2 && < 1.1,
+      cryptohash-sha256 >= 0.11.102 && < 0.12,
+      jose >= 0.11 && < 0.12,
+      lens >= 5.2.3 && < 5.3,
+      wreq >= 0.5.4 && < 0.6,
