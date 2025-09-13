@@ -15,11 +15,16 @@ description: a library to get TLS certificate by communicating to a ACME-provide
 license: BSD-3-Clause
 author:             Lucas DiCioccio
 maintainer:         lucas@dicioccio.fr
+bug-reports:        https://github.com/lucasdicioccio/acme-not-a-joke/issues
 
 -- A copyright notice.
 copyright: Lucas DiCioccio 2023
 category: Security
 extra-source-files: CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/lucasdicioccio/acme-not-a-joke
 
 library
     hs-source-dirs: src
@@ -47,7 +52,7 @@ library
       Acme.NotAJoke.CertManagement
     build-depends:
       aeson >= 2.2.1 && < 2.3,
-      base >= 4.19.1 && < 4.20,
+      base >= 4.19.1 && < 4.21,
       bytestring >= 0.12.1 && < 0.13,
       filepath >= 1.4.200 && < 1.5,
       text >= 2.1.1 && < 2.2,
@@ -55,5 +60,5 @@ library
       base16-bytestring >= 1.0.2 && < 1.1,
       cryptohash-sha256 >= 0.11.102 && < 0.12,
       jose >= 0.11 && < 0.12,
-      lens >= 5.2.3 && < 5.3,
+      lens >= 5.2.3 && < 5.4,
       wreq >= 0.5.4 && < 0.6,
