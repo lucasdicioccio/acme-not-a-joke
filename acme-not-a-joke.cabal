@@ -49,7 +49,7 @@ library
       aeson >= 2.2.1 && < 2.3,
       base >= 4.19.1 && < 5,
       bytestring >= 0.12.1 && < 0.13,
-      filepath >= 1.4.200 && < 1.5,
+      filepath >= 1.4.200 && < 1.6,
       text >= 2.1.1 && < 2.2,
       time >= 1.12.2 && < 1.13,
       base16-bytestring >= 1.0.2 && < 1.1,
