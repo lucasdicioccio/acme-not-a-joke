@@ -1,11 +1,10 @@
 module Acme.NotAJoke.Api.Certificate where
 
-import Control.Lens hiding ((.=))
 import Data.Aeson (encode)
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as ByteString
 import Data.Coerce (coerce)
-import qualified Network.Wreq as Wreq
+import qualified Network.HTTP.Client as HTTP
 
 import qualified Crypto.JOSE.JWS as JWS
 
@@ -18,7 +17,7 @@ import Acme.NotAJoke.Api.Nonce
 You should be able to figure out most of the ACME flow by looking how you
 build a Certificate and pulling all the dependencies.
 -}
-newtype Certificate = Certificate (Wreq.Response ByteString)
+newtype Certificate = Certificate Response
     deriving (Show)
 
 -- | A PEM-file representation of a certificate.
@@ -29,23 +28,19 @@ storeCert path cert = ByteString.writeFile path (coerce $ readPEM cert)
 
 -- | Lookup a PEM from a certificate.
 readPEM :: Certificate -> PEM
-readPEM (Certificate rsp) = PEM $ rsp ^. Wreq.responseBody
+readPEM (Certificate rsp) = PEM $ HTTP.responseBody rsp
 
 -- | Retrieves a certificate from an URL.
-postGetCertificate :: JWS.JWK -> KID -> Url "certificate" -> Nonce -> IO (Maybe Certificate)
+postGetCertificate :: JWS.JWK -> KID -> Url "certificate" -> Nonce -> IO (Either AcmeError Certificate)
 postGetCertificate jwk kid certificateUrl nonce = do
-    let opts =
-            Wreq.defaults
-                & Wreq.header "Content-Type" .~ ["application/jose+json"]
-                & Wreq.header "Accept" .~ ["application/pem-certificate-chain"]
+    let headers = [("Accept", "application/pem-certificate-chain")]
     ebody <- (kidSign jwk ep kid nonce "")
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ Certificate e
+            e <- postJoseWith headers ep $ encode body
+            pure $ fmap Certificate e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     ep :: Endpoint "certificate"
     ep = coerce certificateUrl

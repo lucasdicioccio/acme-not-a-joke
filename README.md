@@ -11,8 +11,13 @@ What I'd like to change with low appetite:
 - allow to tweak algos (works for RS256 only)
 - better helpers to create/load/write various PKI-related formats
 
-What I'd like to change with low appetite:
-- no longer use `wreq` (it returns non-200 with exception)
+Errors are returned as values: API calls return an `Either AcmeError a`, where
+an `AcmeError` tells whether the request could not be signed, whether the
+server rejected the request (in which case `readProblem` gives the
+[RFC-7807](https://datatracker.ietf.org/doc/html/rfc7807) problem document sent
+by the ACME server), or whether the response was not the expected one. Only
+network-level failures (no connection, TLS errors) are raised as exceptions (the
+`HttpException` from `http-client`).
 
 Design-wise, the library uses a TypeFamily pattern to specify/modulate which
 fields are available for ACME resources in various APIs/states (e.g., an
@@ -32,8 +37,10 @@ bash scripts/gen-csr.sh staging example dicioccio.fr
 create a new account
 
 ```hs
-import Acme.NotAJoke.Client
+import Acme.NotAJoke.Api.Account
 import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Nonce
 import Acme.NotAJoke.KeyManagement
 import Acme.NotAJoke.LetsEncrypt
 import Data.Maybe
@@ -42,9 +49,15 @@ loadedjwk <- loadJWKFile "staging/key.jwk"
 let jwk = fromJust loadedjwk
 let contacts = ["mailto:certmaster@dicioccio.fr"]
 
-leDir <- fetchDirectory (directory staging_letsencryptv2)
-nonce0 <- fromJust <$> getNonce leDir.newNonce
-postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+Right leDir <- fetchDirectory (directory staging_letsencryptv2)
+Right nonce0 <- getNonce leDir.newNonce
+created <- postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+```
+
+inspect what the server complained about, if anything
+
+```hs
+either (\err -> print (readProblem err)) print created
 ```
 
 create a new cert
