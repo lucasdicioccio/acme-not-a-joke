@@ -1,0 +1,51 @@
+cabal-version:      2.4
+name:               acme-not-a-joke-wai
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+synopsis: serves ACME http-01 challenges from wai applications
+
+-- A longer description of the package.
+description: a wai middleware and a step handler to validate HTTP-01 challenges (rfc-8555) with the acme-not-a-joke library, so that a wai/warp application can get its own TLS certificates.
+
+-- The license under which the package is released.
+license: BSD-3-Clause
+license-file: LICENSE
+author:             Lucas DiCioccio
+maintainer:         lucas@dicioccio.fr
+
+-- A copyright notice.
+copyright: Lucas DiCioccio 2023
+category: Security
+extra-source-files: CHANGELOG.md
+
+library
+    hs-source-dirs: src
+    ghc-options: -Wall
+    default-language: Haskell2010
+    default-extensions: OverloadedStrings OverloadedRecordDot
+    exposed-modules:
+      Acme.NotAJoke.Wai.Http01
+    build-depends:
+      acme-not-a-joke >= 0.2 && < 0.3,
+      base >= 4.19.1 && < 5,
+      bytestring >= 0.12.1 && < 0.13,
+      containers >= 0.6.8 && < 0.8,
+      text >= 2.1.1 && < 2.2,
+      http-types >= 0.12.4 && < 0.13,
+      wai >= 3.2.4 && < 3.3,
+
+test-suite http01
+    type: exitcode-stdio-1.0
+    hs-source-dirs: test
+    main-is: Main.hs
+    ghc-options: -Wall
+    default-language: Haskell2010
+    default-extensions: OverloadedStrings
+    build-depends:
+      acme-not-a-joke,
+      acme-not-a-joke-wai,
+      base,
+      bytestring,
+      http-types,
+      wai,

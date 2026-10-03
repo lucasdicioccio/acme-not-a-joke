@@ -8,7 +8,7 @@ import Data.Text (Text)
 import Acme.NotAJoke.Api.Account
 import Acme.NotAJoke.Api.CSR
 import Acme.NotAJoke.Api.Certificate
-import Acme.NotAJoke.Api.Challenge (Token (..), isDNS01)
+import Acme.NotAJoke.Api.Challenge (Token (..), isDNS01, isHTTP01)
 import Acme.NotAJoke.Api.Endpoint
 import Acme.NotAJoke.Api.Order
 import Acme.NotAJoke.Api.Validation
@@ -38,6 +38,17 @@ data DanceStep
 
 runAcmeDance_dns01 :: AcmeDancer -> IO ()
 runAcmeDance_dns01 = runAcmeDance isDNS01
+
+{- | Runs the dance with an HTTP-01 challenge: the 'KeyAuthorization' given in
+the 'Validation' step must be served at
+@http:\/\/{domain}\/.well-known\/acme-challenge\/{token}@ (on port 80) before the
+step handler returns.
+
+HTTP-01 challenges cannot validate wildcard identifiers, use
+'runAcmeDance_dns01' for these.
+-}
+runAcmeDance_http01 :: AcmeDancer -> IO ()
+runAcmeDance_http01 = runAcmeDance isHTTP01
 
 runAcmeDance :: MatchChallenge -> AcmeDancer -> IO ()
 runAcmeDance matchChallenge dancer = do

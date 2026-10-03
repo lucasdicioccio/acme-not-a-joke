@@ -80,6 +80,32 @@ let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicio
 runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (ghciDance "staging-example/certificate.pem"))
 ```
 
+### http-01 challenges with wai
+
+The example above uses a DNS-01 challenge. The `acme-not-a-joke-wai` package
+(in the `acme-not-a-joke-wai` directory) serves HTTP-01 challenges from a
+wai application: a middleware answers the
+`GET /.well-known/acme-challenge/{token}` requests of the ACME server, and the
+dance fills and clears the store of challenges read by the middleware.
+
+```hs
+import Acme.NotAJoke.Wai.Http01
+import Control.Concurrent (forkIO, threadDelay)
+import Network.Wai.Handler.Warp (run)
+
+store <- newChallengeStore
+-- the ACME server connects on port 80
+_ <- forkIO $ run 80 (http01Middleware store myApplication)
+
+let handle step = case step of
+      WaitingForValidation n -> threadDelay (n * 1000000)
+      Done _ cert -> storeCert "staging-example/certificate.pem" cert
+      _ -> pure ()
+runAcmeDance_http01_wai store (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o handle)
+```
+
+HTTP-01 challenges cannot validate wildcard identifiers, which require a DNS-01
+challenge.
 
 ## website
 
