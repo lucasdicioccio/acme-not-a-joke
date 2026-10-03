@@ -1,0 +1,65 @@
+=base:build-info.json
+{"layout":"index"
+,"publicationStatus":"Public"
+}
+
+=base:preamble.json
+{"author": "Lucas DiCioccio"
+,"date": "2026-10-03T08:00:00Z"
+,"title": "acme-not-a-joke"
+,"imageLink": "/images/logo.png"
+}
+
+=base:main-content.cmark
+
+<p align="center">
+  <img src="/images/logo.png" alt="acme-not-a-joke: a very serious certificate seal" width="240">
+</p>
+
+# acme-not-a-joke
+
+A Haskell library of primitives to perform ACME certifications
+([RFC 8555](https://datatracker.ietf.org/doc/html/rfc8555)): the protocol
+by which a provider such as Let's Encrypt issues TLS certificates.
+
+The package is named `acme-not-a-joke` because `acme-` packages on Hackage
+typically are "joke" packages. This one is not.
+
+```hs
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.LetsEncrypt
+import Data.Maybe
+
+loadedjwk <- loadJWKFile "staging/key.jwk"
+let jwk = fromJust loadedjwk
+let contacts = ["mailto:certmaster@dicioccio.fr"]
+
+leDir <- fetchDirectory (directory staging_letsencryptv2)
+nonce0 <- fromJust <$> getNonce leDir.newNonce
+postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+```
+
+The library is incomplete and subject to changes, but the happy path works:
+create an account, place an order, answer a challenge, and fetch the
+certificate.
+
+The code is on GitHub at
+[`lucasdicioccio/acme-not-a-joke`](https://github.com/lucasdicioccio/acme-not-a-joke).
+
+## Explore
+
+- [**Introducing acme-not-a-joke**](/introducing-acme-not-a-joke.html): what
+  the library covers today, how its types are organised, and how to get a
+  first certificate from the Let's Encrypt staging environment.
+
+=base:main-css.tramaj-json
+{ "format": "css"
+, "contents":
+  [ "@import \"`$ctx.pathPrefix`/css/colors.css\";"
+  , "@import \"`$ctx.pathPrefix`/css/navigation.css\";"
+  , "@import \"`$ctx.pathPrefix`/css/articles-listing.css\";"
+  , "@import \"`$ctx.pathPrefix`/css/index.css\";"
+  ]
+}

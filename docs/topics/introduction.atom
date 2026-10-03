@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title type="text">acme-not-a-joke</title><id>https://lucasdicioccio.github.io/acme-not-a-joke/atom.xml</id><updated>2026-10-03T08:00:00Z</updated><entry><id>https://lucasdicioccio.github.io/acme-not-a-joke/introducing-acme-not-a-joke.html</id><title type="text">Introducing acme-not-a-joke</title><updated>2026-10-03T08:00:00Z</updated><author><name>Lucas DiCioccio</name></author><content type="html">&lt;div class="main-article"&gt;&lt;section class="main-section"&gt;&lt;h2 id="introducing-acme-not-a-joke"&gt;Introducing acme-not-a-joke&lt;/h2&gt;
+&lt;p&gt;acme-not-a-joke is a Haskell library of primitives to perform ACME
+certifications, as specified by
+&lt;a href="https://datatracker.ietf.org/doc/html/rfc8555"&gt;RFC 8555&lt;/a&gt;. ACME is the
+protocol spoken by providers such as Let’s Encrypt: a client proves that it
+controls a domain name and gets a TLS certificate for it in return.&lt;/p&gt;
+&lt;h3 id="about-the-name"&gt;About the name&lt;/h3&gt;
+&lt;p&gt;&lt;code&gt;acme-&lt;/code&gt; packages on Hackage typically are “joke” packages. This library
+implements the ACME protocol in earnest, hence the name: the &lt;code&gt;acme&lt;/code&gt; prefix
+is not the marker of a joke here.&lt;/p&gt;
+&lt;h3 id="status"&gt;Status&lt;/h3&gt;
+&lt;p&gt;The library is incomplete and subject to changes, but the happy path works.&lt;/p&gt;
+&lt;p&gt;Things the author would like to change, with low appetite:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;support more features (especially, revocations);
+&lt;/li&gt;
+&lt;li&gt;allow to tweak algorithms (it works for RS256 only);
+&lt;/li&gt;
+&lt;li&gt;better helpers to create, load and write various PKI-related formats;
+&lt;/li&gt;
+&lt;li&gt;no longer use &lt;code&gt;wreq&lt;/code&gt; (it reports non-200 responses with an exception).
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The todo list also has: some more documentation, &lt;code&gt;keyChange&lt;/code&gt;, and
+deactivating an account.&lt;/p&gt;
+&lt;h3 id="design"&gt;Design&lt;/h3&gt;
+&lt;p&gt;The library uses a type-family pattern to specify which fields are available
+for an ACME resource in the various API calls and states. For instance, an
+&lt;code&gt;Account&lt;/code&gt; in the &lt;code&gt;&amp;quot;account-create&amp;quot;&lt;/code&gt; message has no “orders” field. The state
+is a type-level string, so types read like &lt;code&gt;Account &amp;quot;account-fetch&amp;quot;&lt;/code&gt; or
+&lt;code&gt;Order &amp;quot;order-create&amp;quot;&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The modules are organised as follows:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;Acme.NotAJoke.Api.*&lt;/code&gt; holds one module per ACME resource or concept, among
+which &lt;code&gt;Directory&lt;/code&gt;, &lt;code&gt;Nonce&lt;/code&gt;, &lt;code&gt;Account&lt;/code&gt;, &lt;code&gt;Order&lt;/code&gt;, &lt;code&gt;Authorization&lt;/code&gt;,
+&lt;code&gt;Challenge&lt;/code&gt;, &lt;code&gt;Validation&lt;/code&gt;, &lt;code&gt;CSR&lt;/code&gt;, &lt;code&gt;Certificate&lt;/code&gt; and &lt;code&gt;JWS&lt;/code&gt;;
+&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Acme.NotAJoke.Client&lt;/code&gt; has the calls to an ACME server;
+&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Acme.NotAJoke.Dancer&lt;/code&gt; chains these calls into a whole “dance”, from an
+order to a certificate;
+&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Acme.NotAJoke.KeyManagement&lt;/code&gt; and &lt;code&gt;Acme.NotAJoke.CertManagement&lt;/code&gt; have
+helpers to load and store keys, certificate signing requests and
+certificates;
+&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Acme.NotAJoke.LetsEncrypt&lt;/code&gt; has the base URLs of Let’s Encrypt, for
+production and for staging.
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id="a-first-certificate"&gt;A first certificate&lt;/h3&gt;
+&lt;p&gt;The examples below are meant for GHCi and target the Let’s Encrypt staging
+environment, with the account key stored as a JWK in &lt;code&gt;staging/key.jwk&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;First, generate a key and a certificate signing request with the script
+shipped in the repository:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-console"&gt;bash scripts/gen-csr.sh staging example dicioccio.fr
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then, create a new account:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-hs"&gt;import Acme.NotAJoke.Client
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.LetsEncrypt
+import Data.Maybe
+
+loadedjwk &amp;lt;- loadJWKFile &amp;quot;staging/key.jwk&amp;quot;
+let jwk = fromJust loadedjwk
+let contacts = [&amp;quot;mailto:certmaster@dicioccio.fr&amp;quot;]
+
+leDir &amp;lt;- fetchDirectory (directory staging_letsencryptv2)
+nonce0 &amp;lt;- fromJust &amp;lt;$&amp;gt; getNonce leDir.newNonce
+postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Finally, create a new certificate:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-hs"&gt;import Acme.NotAJoke.CertManagement
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.Dancer
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.CSR
+import Acme.NotAJoke.Api.Order
+import Acme.NotAJoke.LetsEncrypt
+import Data.Maybe
+
+jwk &amp;lt;- fromJust &amp;lt;$&amp;gt; loadJWKFile &amp;quot;staging/key.jwk&amp;quot;
+der &amp;lt;- loadDER &amp;quot;staging-example/certificate.csr.der&amp;quot;
+
+let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder &amp;quot;example.dicioccio.fr&amp;quot; ]
+runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount [&amp;quot;mailto:certmaster@dicioccio.fr&amp;quot;]) (CSR der) o (ghciDance &amp;quot;staging-example/certificate.pem&amp;quot;))
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;runAcmeDance_dns01&lt;/code&gt; runs the whole exchange with a DNS-01 challenge. The
+last field of the &lt;code&gt;AcmeDancer&lt;/code&gt; is a handler called at each step of the
+dance. &lt;code&gt;ghciDance&lt;/code&gt; is a handler meant for GHCi: it prints each step, and
+when the validation proof is known it prints it and waits for you to press
+ENTER, which leaves you the time to publish the proof in the DNS. Once the
+certificate is fetched, it stores it at the given path.&lt;/p&gt;
+&lt;h3 id="where-to-go-next"&gt;Where to go next&lt;/h3&gt;
+&lt;p&gt;The code and its README are on GitHub at
+&lt;a href="https://github.com/lucasdicioccio/acme-not-a-joke"&gt;&lt;code&gt;lucasdicioccio/acme-not-a-joke&lt;/code&gt;&lt;/a&gt;.&lt;/p&gt;
+&lt;/section&gt;&lt;/div&gt;</content><link href="https://lucasdicioccio.github.io/acme-not-a-joke/introducing-acme-not-a-joke.html" rel="alternate"/><summary type="text">What acme-not-a-joke is, what it covers today, and how to create an account and get a first certificate from the Let's Encrypt staging environment.</summary></entry></feed>

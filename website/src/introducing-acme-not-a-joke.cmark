@@ -1,0 +1,151 @@
+=base:build-info.json
+{"layout":"article"
+,"publicationStatus":"Public"
+}
+
+=base:preamble.json
+{"author": "Lucas DiCioccio"
+,"date": "2026-10-03T08:00:00Z"
+,"title": "Introducing acme-not-a-joke"
+,"imageLink": "/images/logo.png"
+}
+
+=base:topic.json
+{"topics":["introduction"]
+,"keywords":["acme", "rfc-8555", "tls", "certificates", "letsencrypt", "haskell"]
+}
+
+=base:social.json
+{"twitter": "lucasdicioccio"
+,"linkedin": "lucasdicioccio"
+,"github": "lucasdicioccio"
+,"mastodon": "https://fosstodon.org/@lucasdicioccio"
+}
+
+=base:summary.cmark
+What acme-not-a-joke is, what it covers today, and how to create an account and get a first certificate from the Let's Encrypt staging environment.
+
+=base:main-content.cmark
+
+# Introducing acme-not-a-joke
+
+acme-not-a-joke is a Haskell library of primitives to perform ACME
+certifications, as specified by
+[RFC 8555](https://datatracker.ietf.org/doc/html/rfc8555). ACME is the
+protocol spoken by providers such as Let's Encrypt: a client proves that it
+controls a domain name and gets a TLS certificate for it in return.
+
+## About the name
+
+`acme-` packages on Hackage typically are "joke" packages. This library
+implements the ACME protocol in earnest, hence the name: the `acme` prefix
+is not the marker of a joke here.
+
+## Status
+
+The library is incomplete and subject to changes, but the happy path works.
+
+Things the author would like to change, with low appetite:
+
+- support more features (especially, revocations);
+- allow to tweak algorithms (it works for RS256 only);
+- better helpers to create, load and write various PKI-related formats;
+- no longer use `wreq` (it reports non-200 responses with an exception).
+
+The todo list also has: some more documentation, `keyChange`, and
+deactivating an account.
+
+## Design
+
+The library uses a type-family pattern to specify which fields are available
+for an ACME resource in the various API calls and states. For instance, an
+`Account` in the `"account-create"` message has no "orders" field. The state
+is a type-level string, so types read like `Account "account-fetch"` or
+`Order "order-create"`.
+
+The modules are organised as follows:
+
+- `Acme.NotAJoke.Api.*` holds one module per ACME resource or concept, among
+  which `Directory`, `Nonce`, `Account`, `Order`, `Authorization`,
+  `Challenge`, `Validation`, `CSR`, `Certificate` and `JWS`;
+- `Acme.NotAJoke.Client` has the calls to an ACME server;
+- `Acme.NotAJoke.Dancer` chains these calls into a whole "dance", from an
+  order to a certificate;
+- `Acme.NotAJoke.KeyManagement` and `Acme.NotAJoke.CertManagement` have
+  helpers to load and store keys, certificate signing requests and
+  certificates;
+- `Acme.NotAJoke.LetsEncrypt` has the base URLs of Let's Encrypt, for
+  production and for staging.
+
+## A first certificate
+
+The examples below are meant for GHCi and target the Let's Encrypt staging
+environment, with the account key stored as a JWK in `staging/key.jwk`.
+
+First, generate a key and a certificate signing request with the script
+shipped in the repository:
+
+```console
+bash scripts/gen-csr.sh staging example dicioccio.fr
+```
+
+Then, create a new account:
+
+```hs
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.LetsEncrypt
+import Data.Maybe
+
+loadedjwk <- loadJWKFile "staging/key.jwk"
+let jwk = fromJust loadedjwk
+let contacts = ["mailto:certmaster@dicioccio.fr"]
+
+leDir <- fetchDirectory (directory staging_letsencryptv2)
+nonce0 <- fromJust <$> getNonce leDir.newNonce
+postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+```
+
+Finally, create a new certificate:
+
+```hs
+import Acme.NotAJoke.CertManagement
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.Dancer
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.CSR
+import Acme.NotAJoke.Api.Order
+import Acme.NotAJoke.LetsEncrypt
+import Data.Maybe
+
+jwk <- fromJust <$> loadJWKFile "staging/key.jwk"
+der <- loadDER "staging-example/certificate.csr.der"
+
+let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicioccio.fr" ]
+runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (ghciDance "staging-example/certificate.pem"))
+```
+
+`runAcmeDance_dns01` runs the whole exchange with a DNS-01 challenge. The
+last field of the `AcmeDancer` is a handler called at each step of the
+dance. `ghciDance` is a handler meant for GHCi: it prints each step, and
+when the validation proof is known it prints it and waits for you to press
+ENTER, which leaves you the time to publish the proof in the DNS. Once the
+certificate is fetched, it stores it at the given path.
+
+## Where to go next
+
+The code and its README are on GitHub at
+[`lucasdicioccio/acme-not-a-joke`](https://github.com/lucasdicioccio/acme-not-a-joke).
+
+=base:main-css.tramaj-json
+{ "format": "css"
+, "contents":
+  [ ""
+  , "@import \"`$ctx.pathPrefix`/css/dev.css\";"
+  , "@import \"`$ctx.pathPrefix`/css/colors.css\";"
+  , "@import \"`$ctx.pathPrefix`/css/article.css\";"
+  , "@import \"`$ctx.pathPrefix`/css/navigation.css\";"
+  ]
+}

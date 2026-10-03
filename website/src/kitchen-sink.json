@@ -1,0 +1,7 @@
+{ "title": "acme-not-a-joke"
+, "publishURL": "https://lucasdicioccio.github.io"
+, "basePath": "/acme-not-a-joke"
+, "twitterLogin": "lucasdicioccio"
+, "commands": []
+, "api": {"tag":"NoProxying"}
+}

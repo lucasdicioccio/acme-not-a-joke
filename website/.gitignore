@@ -1,0 +1,3 @@
+# Kitchen-Sink dev-server output. src/ is the source and stays tracked; the
+# published site is produced into the repository's docs/.
+www/
