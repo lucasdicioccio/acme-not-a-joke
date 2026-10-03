@@ -1,12 +1,10 @@
 module Acme.NotAJoke.Api.Authorization where
 
-import Control.Lens hiding ((.=))
 import Data.Aeson (FromJSON (..), ToJSON (..), decode, encode, object, pairs, withObject, withText, (.:), (.:?), (.=))
-import Data.ByteString.Lazy (ByteString)
 import Data.Coerce (coerce)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import qualified Network.Wreq as Wreq
+import qualified Network.HTTP.Client as HTTP
 
 import qualified Crypto.JOSE.JWS as JWS
 
@@ -78,7 +76,7 @@ data Authorization a
     , wildcard :: Field a "wildcard" (Maybe Bool)
     }
 
-newtype AuthorizationInspected = AuthorizationInspected (Wreq.Response ByteString)
+newtype AuthorizationInspected = AuthorizationInspected Response
     deriving (Show)
 
 type instance Field "authorization-inspected" "status" x = x
@@ -98,20 +96,18 @@ instance FromJSON (Authorization "authorization-inspected") where
 
 -- | Lookup an Authorization.
 readAuthorization :: AuthorizationInspected -> Maybe (Authorization "authorization-inspected")
-readAuthorization (AuthorizationInspected rsp) = decode $ rsp ^. Wreq.responseBody
+readAuthorization (AuthorizationInspected rsp) = decode $ HTTP.responseBody rsp
 
 -- | Inspects an authorization from its URL.
-postGetAuthorization :: JWS.JWK -> KID -> Url "authorization" -> Nonce -> IO (Maybe AuthorizationInspected)
+postGetAuthorization :: JWS.JWK -> KID -> Url "authorization" -> Nonce -> IO (Either AcmeError AuthorizationInspected)
 postGetAuthorization jwk kid authUrl nonce = do
-    let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
     ebody <- (kidSign jwk ep kid nonce "")
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ AuthorizationInspected e
+            e <- postJose ep $ encode body
+            pure $ fmap AuthorizationInspected e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     ep :: Endpoint "authorization"
     ep = coerce authUrl

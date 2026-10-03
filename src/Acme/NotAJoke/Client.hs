@@ -1,9 +1,10 @@
-{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
-
 module Acme.NotAJoke.Client where
 
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+import Data.Coerce (Coercible, coerce)
 import qualified Data.List as List
-import Data.Maybe (fromJust)
+import Data.Text (Text)
 
 import qualified Crypto.JOSE.JWK as JWK
 
@@ -19,9 +20,10 @@ import Acme.NotAJoke.Api.Order
 import Acme.NotAJoke.Api.Validation
 
 {- | An IO-type for ACME primitives.
+Errors from the ACME server are returned as values (see 'AcmeError').
 As we iterate on this lib, this type may change to become a monad-stack/mtl-mashup.
 -}
-type AcmePrim a = IO (Maybe a)
+type AcmePrim a = IO (Either AcmeError a)
 
 {- | An object carrying all functions to generate a single authorization from a
 single order with a DNS challenge.
@@ -57,11 +59,11 @@ data PrepareStep
 
 type MatchChallenge = Challenge "challenge-unspecified" -> Bool
 
--- TODO:
+{- | Runs the first steps of the ACME dance: up to the point where the client
+has to prove it controls the identifier in the order.
 
--- * step for errors
-
--- * return shortcuts in handleStep function
+Stops at the first error, which is returned.
+-}
 prepareAcmeOrder ::
     BaseUrl ->
     JWK.JWK ->
@@ -70,38 +72,36 @@ prepareAcmeOrder ::
     Order "order-create" ->
     MatchChallenge ->
     (PrepareStep -> IO ()) ->
-    IO AcmeSingle
-prepareAcmeOrder baseurl jwk account csr1 order matchChallenge handleStep = do
-    handleStep $ Starting
+    IO (Either AcmeError AcmeSingle)
+prepareAcmeOrder baseurl jwk account csr1 order matchChallenge handleStep = runExceptT $ do
+    step $ Starting
 
     -- unauthenticated info
-    acmeDir <- fetchDirectory (directory baseurl)
-    nf <- fetcher (handleStep GettingNonce >> getNonce acmeDir.newNonce)
-    let mknonce = nf.produce
-    let nonceify = fromJust <$> mknonce
-    handleStep $ GotDirectory acmeDir
+    acmeDir <- ExceptT $ fetchDirectory (directory baseurl)
+    nf <- liftIO $ fetcher (handleStep GettingNonce >> getNonce acmeDir.newNonce)
+    let nonceify :: (Nonce -> AcmePrim a) -> AcmePrim a
+        nonceify f = either (pure . Left) f =<< nf.produce
+    step $ GotDirectory acmeDir
 
     -- fetch account
-    nonce1 <- nonceify
-    Just accountCreated <- saveNonce nf (postFetchAccount jwk acmeDir.newAccount nonce1 account)
-    let (Just kid) = readKID accountCreated
-    handleStep $ GotAccount accountCreated
+    accountCreated <- ExceptT $ saveNonce nf (nonceify $ \nonce -> postFetchAccount jwk acmeDir.newAccount nonce account)
+    kid <- expect "no account location" accountCreated $ readKID accountCreated
+    step $ GotAccount accountCreated
 
     -- prepare new order
-    nonce2 <- nonceify
-    Just orderCreated <- saveNonce nf (postNewOrder jwk acmeDir.newOrder kid nonce2 order)
-    let Just authUrl = safeHead . authorizations =<< readOrderCreated orderCreated
-    handleStep $ GotOrder orderCreated
+    orderCreated <- ExceptT $ saveNonce nf (nonceify $ \nonce -> postNewOrder jwk acmeDir.newOrder kid nonce order)
+    authUrl <- expect "no authorization in order" orderCreated $ safeHead . authorizations =<< readOrderCreated orderCreated
+    step $ GotOrder orderCreated
 
     -- poller for order
-    let Just orderUrl = readOrderUrl orderCreated
-    let fpollOrder = saveNonce nf (postGetOrder jwk orderUrl kid =<< nonceify)
+    orderUrl <- expect "no order location" orderCreated $ readOrderUrl orderCreated
+    let fpollOrder = saveNonce nf (nonceify $ postGetOrder jwk orderUrl kid)
 
     -- read authorization's dns challenge
-    let ffetchAuthorization = saveNonce nf (postGetAuthorization jwk kid authUrl =<< nonceify)
-    Just authorizationInspected <- ffetchAuthorization
-    handleStep $ GotAuthorization authorizationInspected
-    let Just challenge = List.find matchChallenge . challenges =<< readAuthorization authorizationInspected
+    let ffetchAuthorization = saveNonce nf (nonceify $ postGetAuthorization jwk kid authUrl)
+    authorizationInspected <- ExceptT $ ffetchAuthorization
+    step $ GotAuthorization authorizationInspected
+    challenge <- expect "no matching challenge in authorization" authorizationInspected $ List.find matchChallenge . challenges =<< readAuthorization authorizationInspected
 
     -- challenge validation proof
     let tok = challenge.token
@@ -109,18 +109,25 @@ prepareAcmeOrder baseurl jwk account csr1 order matchChallenge handleStep = do
     let proofVal = sha256digest keyAuth
 
     -- read authorization's dns challenge
-    let freplyChallenge = saveNonce nf (postReplyChallenge jwk kid challenge =<< nonceify)
-    let fpollChallenge = saveNonce nf (postGetChallenge jwk kid challenge =<< nonceify)
+    let freplyChallenge = saveNonce nf (nonceify $ postReplyChallenge jwk kid challenge)
+    let fpollChallenge = saveNonce nf (nonceify $ postGetChallenge jwk kid challenge)
 
     -- finalize order
-    let Just finalizeOrderUrl = fmap finalize $ readOrderCreated orderCreated
-    let ffinalizeOrder = saveNonce nf (postFinalizeOrder jwk kid finalizeOrderUrl (Finalize csr1) =<< nonceify)
+    finalizeOrderUrl <- expect "no finalize url in order" orderCreated $ fmap finalize $ readOrderCreated orderCreated
+    let ffinalizeOrder = saveNonce nf (nonceify $ postFinalizeOrder jwk kid finalizeOrderUrl (Finalize csr1))
 
     -- fetch certificate (at last)
-    let ffetchCertificate certificateUrl = saveNonce nf (postGetCertificate jwk kid certificateUrl =<< nonceify)
+    let ffetchCertificate certificateUrl = saveNonce nf (nonceify $ postGetCertificate jwk kid certificateUrl)
 
     pure $ AcmeSingle acmeDir nf fpollOrder ffetchAuthorization (tok, keyAuth, proofVal) freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate
   where
+    step :: PrepareStep -> ExceptT AcmeError IO ()
+    step = liftIO . handleStep
+
+    -- turns a failed lookup in a (successful) response into an error
+    expect :: (Coercible rsp Response) => Text -> rsp -> Maybe x -> ExceptT AcmeError IO x
+    expect what rsp = maybe (throwE $ UnexpectedResponse what (coerce rsp)) pure
+
     safeHead :: [x] -> Maybe x
     safeHead [] = Nothing
     safeHead (x : _) = Just x
