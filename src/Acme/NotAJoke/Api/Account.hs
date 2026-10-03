@@ -1,11 +1,8 @@
 module Acme.NotAJoke.Api.Account where
 
-import Control.Lens hiding ((.=))
 import Data.Aeson (encode, object, (.=))
-import Data.ByteString.Lazy (ByteString)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Encoding
-import qualified Network.Wreq as Wreq
 
 import qualified Crypto.JOSE.JWS as JWS
 
@@ -49,7 +46,7 @@ type instance Field "account-fetch" "orders" x = ()
 type instance Field "account-fetch" "agreement" x = ()
 type instance Field "account-fetch" "onlyReturnExisting" x = x
 
-newtype AccountCreated = AccountCreated (Wreq.Response ByteString)
+newtype AccountCreated = AccountCreated Response
     deriving (Show)
 
 -- | Initializes an account structure, assuming we have read the terms-of-service.
@@ -70,20 +67,18 @@ fetchAccount1 tos onlyfetch contacts = Account () () () tos contacts onlyfetch
 
 -- | Lookup a Key Identifier for the account.
 readKID :: AccountCreated -> Maybe KID
-readKID (AccountCreated rsp) = rsp ^? Wreq.responseHeader "location" . to (KID . Encoding.decodeUtf8)
+readKID (AccountCreated rsp) = KID . Encoding.decodeUtf8 <$> responseHeader "location" rsp
 
 -- | Fetches or create an account (a single API call).
-postCreateAccount :: JWS.JWK -> Endpoint "newAccount" -> Nonce -> Account "account-create" -> IO (Maybe AccountCreated)
+postCreateAccount :: JWS.JWK -> Endpoint "newAccount" -> Nonce -> Account "account-create" -> IO (Either AcmeError AccountCreated)
 postCreateAccount jwk ep nonce acc = do
-    let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
     ebody <- (jwkSign jwk ep nonce $ encode $ serialized)
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ AccountCreated e
+            e <- postJose ep $ encode body
+            pure $ fmap AccountCreated e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     serialized =
         object
@@ -92,17 +87,15 @@ postCreateAccount jwk ep nonce acc = do
             ]
 
 -- | Only fetches an account (i.e., does not create the account if missing).
-postFetchAccount :: JWS.JWK -> Endpoint "newAccount" -> Nonce -> Account "account-fetch" -> IO (Maybe AccountCreated)
+postFetchAccount :: JWS.JWK -> Endpoint "newAccount" -> Nonce -> Account "account-fetch" -> IO (Either AcmeError AccountCreated)
 postFetchAccount jwk ep nonce acc = do
-    let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
     ebody <- (jwkSign jwk ep nonce $ encode $ serialized)
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ AccountCreated e
+            e <- postJose ep $ encode body
+            pure $ fmap AccountCreated e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     serialized =
         object

@@ -3,13 +3,10 @@
 
 module Acme.NotAJoke.Api.Challenge where
 
-import Control.Lens hiding ((.=))
 import Data.Aeson (FromJSON (..), Value (..), encode, withObject, withText, (.:), (.:?))
-import Data.ByteString.Lazy (ByteString)
 import Data.Coerce (coerce)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import qualified Network.Wreq as Wreq
 
 import qualified Crypto.JOSE.JWS as JWS
 
@@ -94,40 +91,36 @@ control a given resource.
 newtype Token = Token Text
     deriving (Eq, Ord, FromJSON)
 
-newtype ChallengeAttempted = ChallengeAttempted (Wreq.Response ByteString)
+newtype ChallengeAttempted = ChallengeAttempted Response
     deriving (Show)
 
 {- | Notify the ACME server that you are ready to reply a challenge.
 
 For instance, after installing the required DNS-records.
 -}
-postReplyChallenge :: JWS.JWK -> KID -> Challenge a -> Nonce -> IO (Maybe ChallengeAttempted)
+postReplyChallenge :: JWS.JWK -> KID -> Challenge a -> Nonce -> IO (Either AcmeError ChallengeAttempted)
 postReplyChallenge jwk kid challenge nonce = do
-    let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
     ebody <- (kidSign jwk ep kid nonce $ encode emptyObject)
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ ChallengeAttempted e
+            e <- postJose ep $ encode body
+            pure $ fmap ChallengeAttempted e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     ep :: Endpoint "authorization"
     ep = coerce (challenge.url)
 
 -- | Query the ACME server about the status of a given challenge.
-postGetChallenge :: JWS.JWK -> KID -> Challenge a -> Nonce -> IO (Maybe ChallengeAttempted)
+postGetChallenge :: JWS.JWK -> KID -> Challenge a -> Nonce -> IO (Either AcmeError ChallengeAttempted)
 postGetChallenge jwk kid challenge nonce = do
-    let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
     ebody <- (kidSign jwk ep kid nonce "")
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ ChallengeAttempted e
+            e <- postJose ep $ encode body
+            pure $ fmap ChallengeAttempted e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     ep :: Endpoint "authorization"
     ep = coerce (challenge.url)

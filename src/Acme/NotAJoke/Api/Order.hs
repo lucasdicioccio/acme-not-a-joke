@@ -1,14 +1,12 @@
 module Acme.NotAJoke.Api.Order where
 
-import Control.Lens hiding ((.=))
 import Data.Aeson (FromJSON (..), ToJSON (..), decode, encode, object, pairs, withObject, withText, (.:), (.:?), (.=))
-import Data.ByteString.Lazy (ByteString)
 import Data.Coerce (coerce)
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Encoding
 import Data.Time.Clock (UTCTime)
-import qualified Network.Wreq as Wreq
+import qualified Network.HTTP.Client as HTTP
 
 import qualified Crypto.JOSE.JWS as JWS
 
@@ -93,7 +91,7 @@ type instance Field "order-create" "authorizations" x = ()
 type instance Field "order-create" "finalize" x = ()
 type instance Field "order-create" "certificate" x = ()
 
-newtype OrderCreated = OrderCreated (Wreq.Response ByteString)
+newtype OrderCreated = OrderCreated Response
     deriving (Show)
 
 type instance Field "order-created" "status" x = x
@@ -125,23 +123,21 @@ createOrder (nbefore, nafter) ois =
     Order () () ois nbefore nafter () () () ()
 
 readOrderUrl :: OrderCreated -> Maybe (Url "order")
-readOrderUrl (OrderCreated rsp) = rsp ^? Wreq.responseHeader "location" . to (Url . Encoding.decodeUtf8)
+readOrderUrl (OrderCreated rsp) = Url . Encoding.decodeUtf8 <$> responseHeader "location" rsp
 
 readOrderCreated :: OrderCreated -> Maybe (Order "order-created")
-readOrderCreated (OrderCreated rsp) = decode $ rsp ^. Wreq.responseBody
+readOrderCreated (OrderCreated rsp) = decode $ HTTP.responseBody rsp
 
 -- | Requests a new order to the server.
-postNewOrder :: JWS.JWK -> Endpoint "newOrder" -> KID -> Nonce -> Order "order-create" -> IO (Maybe OrderCreated)
+postNewOrder :: JWS.JWK -> Endpoint "newOrder" -> KID -> Nonce -> Order "order-create" -> IO (Either AcmeError OrderCreated)
 postNewOrder jwk ep kid nonce ord = do
-    let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
     ebody <- (kidSign jwk ep kid nonce $ encode $ serialized)
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ OrderCreated e
+            e <- postJose ep $ encode body
+            pure $ fmap OrderCreated e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     serialized =
         object $
@@ -151,7 +147,7 @@ postNewOrder jwk ep kid nonce ord = do
                 , Just $ "identifiers" .= ord.identifiers
                 ]
 
-newtype OrderInspected = OrderInspected (Wreq.Response ByteString)
+newtype OrderInspected = OrderInspected Response
     deriving (Show)
 
 type instance Field "order-inspected" "status" x = x
@@ -178,24 +174,22 @@ instance FromJSON (Order "order-inspected") where
             <*> v .:? "certificate"
 
 readOrderInspected :: OrderInspected -> Maybe (Order "order-inspected")
-readOrderInspected (OrderInspected rsp) = decode $ rsp ^. Wreq.responseBody
+readOrderInspected (OrderInspected rsp) = decode $ HTTP.responseBody rsp
 
 readCertificateUrl :: OrderInspected -> Maybe (Url "certificate")
 readCertificateUrl order =
     certificate =<< readOrderInspected order
 
 -- | Fetches a known order to inspect its status.
-postGetOrder :: JWS.JWK -> Url "order" -> KID -> Nonce -> IO (Maybe OrderInspected)
+postGetOrder :: JWS.JWK -> Url "order" -> KID -> Nonce -> IO (Either AcmeError OrderInspected)
 postGetOrder jwk orderurl kid nonce = do
-    let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
     ebody <- (kidSign jwk ep kid nonce "")
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ OrderInspected e
+            e <- postJose ep $ encode body
+            pure $ fmap OrderInspected e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     ep :: Endpoint "order"
     ep = coerce orderurl
@@ -208,25 +202,23 @@ data Finalize
     { csr :: CSR
     }
 
-newtype OrderFinalized = OrderFinalized (Wreq.Response ByteString)
+newtype OrderFinalized = OrderFinalized Response
     deriving (Show)
 
 -- todo: specialize status of a finalized order
 readOrderFinalized :: OrderFinalized -> Maybe (Order "order-created")
-readOrderFinalized (OrderFinalized rsp) = decode $ rsp ^. Wreq.responseBody
+readOrderFinalized (OrderFinalized rsp) = decode $ HTTP.responseBody rsp
 
 -- | Finalize an order after completing a challenge.
-postFinalizeOrder :: JWS.JWK -> KID -> Url "finalize-order" -> Finalize -> Nonce -> IO (Maybe OrderFinalized)
+postFinalizeOrder :: JWS.JWK -> KID -> Url "finalize-order" -> Finalize -> Nonce -> IO (Either AcmeError OrderFinalized)
 postFinalizeOrder jwk kid finalizeurl finalizeobj nonce = do
-    let opts = Wreq.defaults & Wreq.header "Content-Type" .~ ["application/jose+json"]
     ebody <- (kidSign jwk ep kid nonce $ encode $ serialized)
     case ebody of
         Right body -> do
-            e <- Wreq.postWith opts (wrequrl ep) $ encode body
-            pure $ Just $ OrderFinalized e
+            e <- postJose ep $ encode body
+            pure $ fmap OrderFinalized e
         Left err -> do
-            print err
-            pure Nothing
+            pure $ Left $ SigningFailed err
   where
     ep :: Endpoint "finalize-order"
     ep = coerce finalizeurl

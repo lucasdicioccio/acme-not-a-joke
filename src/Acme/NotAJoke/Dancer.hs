@@ -3,7 +3,6 @@ module Acme.NotAJoke.Dancer where
 import Control.Concurrent (threadDelay)
 import Control.Monad (void)
 import qualified Crypto.JOSE.JWK as JWK
-import Data.Maybe (fromJust)
 import Data.Text (Text)
 
 import Acme.NotAJoke.Api.Account
@@ -32,6 +31,8 @@ data DanceStep
     | ValidOrder OrderInspected
     | InvalidOrder OrderInspected
     | OtherError Text
+    | -- | an API call failed, the dance stops
+      AcmeFailure AcmeError
     | Done AcmeSingle Certificate
     | Prepare PrepareStep
 
@@ -40,7 +41,7 @@ runAcmeDance_dns01 = runAcmeDance isDNS01
 
 runAcmeDance :: MatchChallenge -> AcmeDancer -> IO ()
 runAcmeDance matchChallenge dancer = do
-    acme <-
+    prepared <-
         prepareAcmeOrder
             dancer.baseUrl
             dancer.accountJwk
@@ -49,34 +50,46 @@ runAcmeDance matchChallenge dancer = do
             dancer.order
             matchChallenge
             handleAcmeSingleStep
-    go acme
+    either failed go prepared
   where
     go acme = do
         dancer.handleStep $ Validation acme.proof
-        _ <- acme.replyChallenge
-        waitForValidOrder 0 acme
+        replied <- acme.replyChallenge
+        case replied of
+            Left err -> failed err
+            Right _ -> waitForValidOrder 0 acme
 
     handleAcmeSingleStep = dancer.handleStep . Prepare
 
+    failed = dancer.handleStep . AcmeFailure
+
     waitForValidOrder n acme = do
         dancer.handleStep (WaitingForValidation n)
-        recentOrder <- fromJust <$> acme.pollOrder
-        case Acme.NotAJoke.Api.Order.status <$> readOrderInspected recentOrder of
-            Just OrderPending -> waitForValidOrder (succ n) acme
-            Just OrderProcessing -> waitForValidOrder (succ n) acme
-            Just OrderReady -> do
-                x <- fromJust <$> acme.finalizeOrder
-                dancer.handleStep $ OrderIsFinalized x
-                waitForValidOrder (succ n) acme
-            Just OrderValid -> handleValid acme recentOrder
-            Just OrderInvalid -> dancer.handleStep $ InvalidOrder recentOrder
-            _ -> dancer.handleStep $ OtherError "could not inspect order"
+        polled <- acme.pollOrder
+        case polled of
+            Left err -> failed err
+            Right recentOrder ->
+                case Acme.NotAJoke.Api.Order.status <$> readOrderInspected recentOrder of
+                    Just OrderPending -> waitForValidOrder (succ n) acme
+                    Just OrderProcessing -> waitForValidOrder (succ n) acme
+                    Just OrderReady -> do
+                        finalized <- acme.finalizeOrder
+                        case finalized of
+                            Left err -> failed err
+                            Right x -> do
+                                dancer.handleStep $ OrderIsFinalized x
+                                waitForValidOrder (succ n) acme
+                    Just OrderValid -> handleValid acme recentOrder
+                    Just OrderInvalid -> dancer.handleStep $ InvalidOrder recentOrder
+                    _ -> dancer.handleStep $ OtherError "could not inspect order"
 
     handleValid acme o = do
         dancer.handleStep $ ValidOrder o
-        let certUrl = certificate =<< (readOrderInspected o)
-        certif <- acme.fetchCertificate (fromJust certUrl)
-        dancer.handleStep $ Done acme (fromJust certif)
+        case readCertificateUrl o of
+            Nothing -> dancer.handleStep $ OtherError "valid order without certificate url"
+            Just certUrl -> do
+                certif <- acme.fetchCertificate certUrl
+                either failed (dancer.handleStep . Done acme) certif
 
 {- | A dance for running from within GHCI (i.e., printing and expecting you to
 press ENTER to continue).
@@ -104,6 +117,8 @@ ghciDance certPath x =
             print ("order invalid" :: Text, o)
         OtherError txt -> do
             print ("order invalid" :: Text, txt)
+        AcmeFailure err -> do
+            print ("acme failure" :: Text, readProblem err, err)
         Prepare Starting -> do
             print ("starting" :: Text)
         Prepare GettingNonce -> do

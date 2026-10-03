@@ -10,43 +10,40 @@ This module provide helpers to deal with this requirement.
 -}
 module Acme.NotAJoke.Api.Nonce where
 
-import Control.Lens hiding ((.=))
 import Data.Aeson (FromJSON (..), ToJSON (..))
-import Data.ByteString.Lazy (ByteString)
 import Data.Coerce (Coercible, coerce)
 import Data.IORef (atomicModifyIORef, newIORef, writeIORef)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Encoding
-import qualified Network.Wreq as Wreq
 
 import Acme.NotAJoke.Api.Endpoint
 
 newtype Nonce = Nonce Text
     deriving (Show, FromJSON, ToJSON)
 
-getNonce :: Endpoint "newNonce" -> IO (Maybe Nonce)
+getNonce :: Endpoint "newNonce" -> IO (Either AcmeError Nonce)
 getNonce ep = do
-    r <- Wreq.head_ (wrequrl ep)
-    pure $ responseNonceWreq r
+    r <- head_ ep
+    pure $ readNonce =<< r
   where
+    readNonce rsp =
+        maybe (Left $ UnexpectedResponse "no replay-nonce header" rsp) Right $
+            rawResponseNonce rsp
 
-responseNonceWreq :: forall a. Wreq.Response a -> Maybe Nonce
-responseNonceWreq r =
-    r ^? Wreq.responseHeader "replay-nonce" . to Encoding.decodeUtf8 . to Nonce
+rawResponseNonce :: Response -> Maybe Nonce
+rawResponseNonce rsp =
+    Nonce . Encoding.decodeUtf8 <$> responseHeader "replay-nonce" rsp
 
-responseNonceWreqBS :: Wreq.Response ByteString -> Maybe Nonce
-responseNonceWreqBS = responseNonceWreq
-
-responseNonce :: forall a. (Coercible a (Wreq.Response ByteString)) => a -> Maybe Nonce
-responseNonce = responseNonceWreqBS . coerce
+responseNonce :: forall a. (Coercible a Response) => a -> Maybe Nonce
+responseNonce = rawResponseNonce . coerce
 
 data Fetcher = Fetcher
-    { produce :: IO (Maybe Nonce)
+    { produce :: IO (Either AcmeError Nonce)
     , set :: Nonce -> IO ()
-    , fetchNewNonce :: IO (Maybe Nonce)
+    , fetchNewNonce :: IO (Either AcmeError Nonce)
     }
 
-fetcher :: IO (Maybe Nonce) -> IO Fetcher
+fetcher :: IO (Either AcmeError Nonce) -> IO Fetcher
 fetcher fetch = do
     ref <- newIORef Nothing
     pure $ Fetcher (go ref) (writeIORef ref . Just) fetch
@@ -55,14 +52,19 @@ fetcher fetch = do
         val <- atomicModifyIORef ref (\x -> (Nothing, x))
         case val of
             Nothing -> fetch
-            (Just x) -> pure (Just x)
+            (Just x) -> pure (Right x)
 
-saveResponseNonce :: forall a. (Coercible a (Wreq.Response ByteString)) => Fetcher -> a -> IO ()
+saveResponseNonce :: forall a. (Coercible a Response) => Fetcher -> a -> IO ()
 saveResponseNonce nonceFetcher rsp =
     maybe (pure ()) (nonceFetcher.set) (responseNonce rsp)
 
-saveNonce :: forall a. (Coercible a (Wreq.Response ByteString)) => Fetcher -> IO (Maybe a) -> IO (Maybe a)
+{- | Saves the nonce found in the response of an API call.
+Error responses from the server carry a fresh nonce as well, which we save too.
+-}
+saveNonce :: forall a. (Coercible a Response) => Fetcher -> IO (Either AcmeError a) -> IO (Either AcmeError a)
 saveNonce nonceFetcher apiCall = do
     obj <- apiCall
-    maybe (pure ()) (saveResponseNonce nonceFetcher) obj
+    case obj of
+        Right rsp -> saveResponseNonce nonceFetcher rsp
+        Left err -> maybe (pure ()) (saveResponseNonce nonceFetcher) (errorResponse err)
     pure obj
