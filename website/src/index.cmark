@@ -7,9 +7,14 @@
 {"author": "Lucas DiCioccio"
 ,"date": "2026-10-03T08:00:00Z"
 ,"title": "acme-not-a-joke"
+,"imageLink": "/images/logo.png"
 }
 
 =base:main-content.cmark
+
+<p align="center">
+  <img src="/images/logo.png" alt="acme-not-a-joke: a very serious certificate seal" width="240">
+</p>
 
 # acme-not-a-joke
 

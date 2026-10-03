@@ -9,6 +9,10 @@ Kitchen-Sink assembles them into a static site.
   pages (`index.cmark`, `introducing-acme-not-a-joke.cmark`, `llms.txt`), the
   layout pages (`topics`, `hashtags`, `glossary`) and the CSS/JS they
   reference.
+- `src/logo.svg` — the logo, hand-written; `src/logo.png` and
+  `src/favicon.png` are rendered from it and are what the pages reference
+  (`convert -background none -density 192 logo.svg -resize 512x512 logo.png`,
+  and `-resize 64x64 favicon.png`).
 - `scripts/publish.sh` — produces the site into the repository's `docs/`.
 - `www/` — the dev server's output directory (gitignored).
 

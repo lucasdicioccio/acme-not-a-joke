@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- acme-not-a-joke logo: a certificate seal that takes itself very
+     seriously. Original artwork, hand-written for this repository. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>acme-not-a-joke</title>
+
+  <!-- ribbon tails -->
+  <g fill="#9b2335" stroke="#6f1524" stroke-width="3" stroke-linejoin="round">
+    <path d="M88 176 L62 244 L90 232 L106 252 L126 190 Z"/>
+    <path d="M168 176 L194 244 L166 232 L150 252 L130 190 Z"/>
+  </g>
+
+  <!-- scalloped edge of the seal -->
+  <g fill="#c9a227">
+    <circle cx="222.0" cy="112.0" r="13"/>
+    <circle cx="218.8" cy="136.3" r="13"/>
+    <circle cx="209.4" cy="159.0" r="13"/>
+    <circle cx="194.5" cy="178.5" r="13"/>
+    <circle cx="175.0" cy="193.4" r="13"/>
+    <circle cx="152.3" cy="202.8" r="13"/>
+    <circle cx="128.0" cy="206.0" r="13"/>
+    <circle cx="103.7" cy="202.8" r="13"/>
+    <circle cx="81.0" cy="193.4" r="13"/>
+    <circle cx="61.5" cy="178.5" r="13"/>
+    <circle cx="46.6" cy="159.0" r="13"/>
+    <circle cx="37.2" cy="136.3" r="13"/>
+    <circle cx="34.0" cy="112.0" r="13"/>
+    <circle cx="37.2" cy="87.7" r="13"/>
+    <circle cx="46.6" cy="65.0" r="13"/>
+    <circle cx="61.5" cy="45.5" r="13"/>
+    <circle cx="81.0" cy="30.6" r="13"/>
+    <circle cx="103.7" cy="21.2" r="13"/>
+    <circle cx="128.0" cy="18.0" r="13"/>
+    <circle cx="152.3" cy="21.2" r="13"/>
+    <circle cx="175.0" cy="30.6" r="13"/>
+    <circle cx="194.5" cy="45.5" r="13"/>
+    <circle cx="209.4" cy="65.0" r="13"/>
+    <circle cx="218.8" cy="87.7" r="13"/>
+  </g>
+
+  <!-- the seal itself -->
+  <circle cx="128" cy="112" r="92" fill="#1f2a44" stroke="#c9a227" stroke-width="6"/>
+  <circle cx="128" cy="112" r="79" fill="none" stroke="#c9a227" stroke-width="2"/>
+
+  <!-- a stern brow on the left, a raised one over the monocle -->
+  <g fill="none" stroke="#f4ecd8" stroke-width="7" stroke-linecap="round">
+    <path d="M80 80 L112 88"/>
+    <path d="M138 70 Q160 56 182 70"/>
+  </g>
+
+  <!-- left eye -->
+  <circle cx="98" cy="104" r="7" fill="#f4ecd8"/>
+
+  <!-- monocle, the eye behind it, and its chain -->
+  <circle cx="160" cy="100" r="23" fill="#34415f" stroke="#c9a227" stroke-width="6"/>
+  <circle cx="160" cy="100" r="7" fill="#f4ecd8"/>
+  <path d="M176 117 Q196 150 172 180" fill="none" stroke="#c9a227" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 7"/>
+
+  <!-- moustache -->
+  <path d="M128 140 C116 128 96 132 86 148 C100 142 116 150 128 146 C140 150 156 142 170 148 C160 132 140 128 128 140 Z" fill="#f4ecd8"/>
+
+  <!-- a mouth that is not amused -->
+  <path d="M112 164 L144 164" fill="none" stroke="#f4ecd8" stroke-width="6" stroke-linecap="round"/>
+</svg>
