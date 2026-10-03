@@ -1,0 +1,35 @@
+<!DOCTYPE HTML><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="robots" content="index, follow"><title>acme-not-a-joke - acme-not-a-joke</title><link rel="icon" type="image/x-icon" href="/acme-not-a-joke/images/favicon.png"><link rel="canonical" href="https://lucasdicioccio.github.io/acme-not-a-joke/index.html"><link rel="alternate" type="application/atom+xml" title="Atom Feed" href="https://lucasdicioccio.github.io/acme-not-a-joke/atom.xml"><meta name="author" content="Lucas DiCioccio"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="acme-not-a-joke - acme-not-a-joke"><meta name="twitter:site" content="@lucasdicioccio"><meta name="type" property="og:type" content="article"><meta name="title" property="og:title" content="acme-not-a-joke - acme-not-a-joke"><meta property="og:site_name" content="acme-not-a-joke"><meta name="url" property="og:url" content="https://lucasdicioccio.github.io/acme-not-a-joke/index.html"><meta name="article:published_time" content="2026-10-03T08:00:00Z"><meta name="article:modified_time" content="2026-10-03T08:00:00Z"><meta name="ks:article_json" content="/acme-not-a-joke/json/index.cmark.json"><meta name="ks:article_text" content="/acme-not-a-joke/text/index.cmark.text"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Lucas DiCioccio"},"dateModified":"2026-10-03T08:00:00Z","datePublished":"2026-10-03T08:00:00Z","headline":"acme-not-a-joke","mainEntityOfPage":{"@id":"https://lucasdicioccio.github.io/acme-not-a-joke/index.html","@type":"WebPage"},"publisher":{"@type":"Organization","name":"acme-not-a-joke"}}</script><style>@import "/acme-not-a-joke/css/colors.css";@import "/acme-not-a-joke/css/navigation.css";@import "/acme-not-a-joke/css/articles-listing.css";@import "/acme-not-a-joke/css/index.css";</style></head><body><nav id="site-navigation" class="nav"><a href="/acme-not-a-joke/" class="home-link">Home</a><div id="search-box" data-base-path="/acme-not-a-joke"><script type="text/javascript" src="/acme-not-a-joke/js/search-box.js" async></script></div></nav><div class="main"><article><div class="main-article"><section class="main-section"><h2 id="acme-not-a-joke">acme-not-a-joke</h2>
+<p>A Haskell library of primitives to perform ACME certifications
+(<a href="https://datatracker.ietf.org/doc/html/rfc8555">RFC 8555</a>): the protocol
+by which a provider such as Let’s Encrypt issues TLS certificates.</p>
+<p>The package is named <code>acme-not-a-joke</code> because <code>acme-</code> packages on Hackage
+typically are “joke” packages. This one is not.</p>
+<pre><code class="language-hs">import Acme.NotAJoke.Client
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.LetsEncrypt
+import Data.Maybe
+
+loadedjwk &lt;- loadJWKFile &quot;staging/key.jwk&quot;
+let jwk = fromJust loadedjwk
+let contacts = [&quot;mailto:certmaster@dicioccio.fr&quot;]
+
+leDir &lt;- fetchDirectory (directory staging_letsencryptv2)
+nonce0 &lt;- fromJust &lt;$&gt; getNonce leDir.newNonce
+postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+</code></pre>
+<p>The library is incomplete and subject to changes, but the happy path works:
+create an account, place an order, answer a challenge, and fetch the
+certificate.</p>
+<p>The code is on GitHub at
+<a href="https://github.com/lucasdicioccio/acme-not-a-joke"><code>lucasdicioccio/acme-not-a-joke</code></a>.</p>
+<h3 id="explore">Explore</h3>
+<ul>
+<li><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html"><strong>Introducing acme-not-a-joke</strong></a>: what
+the library covers today, how its types are organised, and how to get a
+first certificate from the Let’s Encrypt staging environment.
+</li>
+</ul>
+</section></div><nav class="articles-listing"><h2 class="listing-callout">latest article</h2><div class="articles-listing-list"><div class="articles-listing-item article-status-published"><span class="article-date">Sat, 03 Oct 2026</span><div><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html">Introducing acme-not-a-joke</a><div class="article-summary"><div class="article-stats"><p>468 words / 2 links / 0 images / 3 snippets</p></div><div class="article-image"></div><p>What acme-not-a-joke is, what it covers today, and how to create an account and get a first certificate from the Let’s Encrypt staging environment.</p>
+</div></div></div></div></nav><nav class="articles-graph"><h2 class="listing-callout">site map</h2><div id="echartzone" data-base-path="/acme-not-a-joke" style="width:800px;height:600px;"></div></nav><nav class="articles-listing"><h2 class="listing-callout">all articles</h2><div class="articles-listing-list"><div class="articles-listing-item article-status-published"><span class="article-date">Sat, 03 Oct 2026</span><div><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html">Introducing acme-not-a-joke</a><div class="article-summary"><div class="article-stats"><p>468 words / 2 links / 0 images / 3 snippets</p></div><div class="article-image"></div><p>What acme-not-a-joke is, what it covers today, and how to create an account and get a first certificate from the Let’s Encrypt staging environment.</p>
+</div></div></div></div></nav><nav class="topics-listing"><h2 class="listing-callout">by topic</h2><div class="topics-listing-list"><div class="topics-listing-list-topic"><strong class="topic-name">introduction</strong><ul class="article-links-list"><li class="article-links-list-item"><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html">Introducing acme-not-a-joke</a></li></ul></div></div></nav></article></div></body></html>

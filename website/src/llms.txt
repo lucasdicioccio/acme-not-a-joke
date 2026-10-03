@@ -1,0 +1,10 @@
+acme-not-a-joke: a Haskell library of primitives to obtain TLS certificates from an ACME provider (RFC 8555) such as Let's Encrypt.
+
+Overview: https://lucasdicioccio.github.io/acme-not-a-joke/
+Introduction: https://lucasdicioccio.github.io/acme-not-a-joke/introducing-acme-not-a-joke.html
+
+Canonical sources, on GitHub:
+- Repository: https://github.com/lucasdicioccio/acme-not-a-joke
+
+Every article on this site is also served as plain text, at
+https://lucasdicioccio.github.io/acme-not-a-joke/text/<page>.cmark.text

@@ -68,6 +68,13 @@ runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:
 ```
 
 
+## website
+
+The site at https://lucasdicioccio.github.io/acme-not-a-joke/ is a
+[Kitchen-Sink](https://kitchensink-tech.github.io/) site. Its sources are in
+`website/src/` and the published output is in `docs/`, see
+[website/README.md](website/README.md).
+
 ## todo list
 
 - tweak supported algos
