@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               acme-not-a-joke
-version:            0.1.0.0
+version:            0.1.1.0
 
 -- A short (one-line) description of the package.
 synopsis: implements ACME clients (rfc-8555)
@@ -20,6 +20,20 @@ maintainer:         lucas@dicioccio.fr
 copyright: Lucas DiCioccio 2023
 category: Security
 extra-source-files: CHANGELOG.md
+
+test-suite pki-formats
+    type: exitcode-stdio-1.0
+    hs-source-dirs: test
+    main-is: Main.hs
+    ghc-options: -Wall
+    default-language: Haskell2010
+    default-extensions: OverloadedStrings
+    build-depends:
+      acme-not-a-joke,
+      base,
+      bytestring,
+      directory,
+      filepath,
 
 library
     hs-source-dirs: src
@@ -53,7 +67,13 @@ library
       text >= 2.1.1 && < 2.2,
       time >= 1.12.2 && < 1.13,
       base16-bytestring >= 1.0.2 && < 1.1,
+      directory >= 1.3.8 && < 1.4,
       cryptohash-sha256 >= 0.11.102 && < 0.12,
+      crypton >= 1.0 && < 1.1,
+      crypton-asn1-encoding >= 0.10 && < 0.11,
+      crypton-asn1-types >= 0.4 && < 0.5,
+      crypton-pem >= 0.3 && < 0.4,
+      crypton-x509 >= 1.8 && < 1.9,
       jose >= 0.11 && < 0.12,
       lens >= 5.2.3 && < 5.4,
       wreq >= 0.5.4 && < 0.6,

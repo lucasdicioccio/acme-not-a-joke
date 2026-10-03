@@ -9,7 +9,6 @@ Incomplete and subject to changes. But the happy path will work.
 What I'd like to change with low appetite:
 - support more features (especially, revocations)
 - allow to tweak algos (works for RS256 only)
-- better helpers to create/load/write various PKI-related formats
 
 What I'd like to change with low appetite:
 - no longer use `wreq` (it returns non-200 with exception)
@@ -67,6 +66,37 @@ let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicio
 runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (ghciDance "staging-example/certificate.pem"))
 ```
 
+### keys and CSRs without openssl
+
+The `scripts/gen-csr.sh` script above calls `openssl` to generate the key of
+the certificate and the CSR. You can stay in Haskell instead:
+`Acme.NotAJoke.KeyManagement` and `Acme.NotAJoke.CertManagement` have helpers
+to create, load and write account keys (JWK), RSA keys (PEM, DER), CSRs (PEM,
+DER) and certificate chains (PEM).
+
+```hs
+import Acme.NotAJoke.CertManagement
+import Acme.NotAJoke.KeyManagement
+import Data.List.NonEmpty (NonEmpty (..))
+
+-- the account key, created on the first run (directories must exist)
+Right jwk <- loadOrCreateJWKFile "staging/key.jwk"
+
+-- the key of the certificate (which must differ from the account key)
+Right key <- loadOrCreateRSAKeyPEM "staging-example/key.pem"
+
+-- a CSR for the names of the order, to pass to the AcmeDancer
+Right csr <- createCSR key ("example.dicioccio.fr" :| [])
+
+-- optionally, keep a copy that `openssl req -in ... -text` can read
+writeCSRPEM csr "staging-example/certificate.csr"
+
+-- once the dance is over, inspect what the server returned
+Right chain <- loadCertificateChain "staging-example/certificate.pem"
+```
+
+Existing files made with `openssl` load as well: see `loadRSAKeyPEM` and
+`loadCSR`.
 
 ## website
 
