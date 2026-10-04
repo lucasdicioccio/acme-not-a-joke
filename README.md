@@ -129,6 +129,29 @@ _ <- forkIO $ runTLS (liveTlsSettings certificates) (setPort 443 defaultSettings
 --   Done _ cert -> installCertificate certificates key cert
 ```
 
+### automatic HTTPS with warp
+
+The `acme-not-a-joke-warp` package (in the `acme-not-a-joke-warp` directory)
+puts the above together, in the spirit of Caddy: it runs your wai application
+over HTTPS, gets the certificates with HTTP-01 challenges when the program
+starts, stores them on disk, renews them before they expire and serves the new
+ones without restarting.
+
+```hs
+import Acme.NotAJoke.LetsEncrypt (letsencryptv2)
+import Acme.NotAJoke.Warp
+import Data.List.NonEmpty (NonEmpty (..))
+
+main :: IO ()
+main =
+  runAutoHttps
+    (defaultAutoHttps letsencryptv2 ("example.dicioccio.fr" :| []) ["mailto:certmaster@dicioccio.fr"] "state")
+    myApplication
+```
+
+See [acme-not-a-joke-warp/README.md](acme-not-a-joke-warp/README.md) for what
+runs, what is stored, and when certificates are renewed.
+
 ### keys and CSRs without openssl
 
 The `scripts/gen-csr.sh` script above calls `openssl` to generate the key of
