@@ -74,6 +74,14 @@ validate an Authorization.
 isDNS01 :: Challenge "challenge-unspecified" -> Bool
 isDNS01 challenge = challenge.type_ == ChallengeDNS01
 
+{- | Predicate useful to locate HTTP-01 challenges when multiple challenges can
+validate an Authorization.
+
+Note that HTTP-01 challenges cannot validate wildcard identifiers.
+-}
+isHTTP01 :: Challenge "challenge-unspecified" -> Bool
+isHTTP01 challenge = challenge.type_ == ChallengeHTTP01
+
 instance FromJSON (Challenge "challenge-unspecified") where
     parseJSON = withObject "Challenge(unspecified)" $ \v ->
         Challenge

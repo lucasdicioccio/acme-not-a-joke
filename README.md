@@ -79,6 +79,56 @@ let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicio
 runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (ghciDance "staging-example/certificate.pem"))
 ```
 
+### http-01 challenges with wai
+
+The example above uses a DNS-01 challenge. The `acme-not-a-joke-wai` package
+(in the `acme-not-a-joke-wai` directory) serves HTTP-01 challenges from a
+wai application: a middleware answers the
+`GET /.well-known/acme-challenge/{token}` requests of the ACME server, and the
+dance fills and clears the store of challenges read by the middleware.
+
+```hs
+import Acme.NotAJoke.Wai.Http01
+import Control.Concurrent (forkIO, threadDelay)
+import Network.Wai.Handler.Warp (run)
+
+store <- newChallengeStore
+-- the ACME server connects on port 80
+_ <- forkIO $ run 80 (http01Middleware store myApplication)
+
+let handle step = case step of
+      WaitingForValidation n -> threadDelay (n * 1000000)
+      Done _ cert -> storeCert "staging-example/certificate.pem" cert
+      _ -> pure ()
+runAcmeDance_http01_wai store (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o handle)
+```
+
+HTTP-01 challenges cannot validate wildcard identifiers, which require a DNS-01
+challenge.
+
+Your program starts the dance (nothing runs in the background) and the only
+incoming request is the one the ACME server sends to port 80. The library
+writes no file on its own: keys, CSR and certificate go where the functions you
+call put them (above, only `storeCert` writes something). See
+[acme-not-a-joke-wai/README.md](acme-not-a-joke-wai/README.md) for who
+initiates what, which files are involved, and a complete example.
+
+The same package has `Acme.NotAJoke.Wai.WarpTLS`: a certificate store read by
+a warp-tls server at each TLS handshake, so that the certificate you just
+obtained (or renewed) is served without restarting.
+
+```hs
+import Acme.NotAJoke.Wai.WarpTLS
+import Network.Wai.Handler.Warp (defaultSettings, setPort)
+import Network.Wai.Handler.WarpTLS (runTLS)
+
+certificates <- newCertificateStore
+_ <- forkIO $ runTLS (liveTlsSettings certificates) (setPort 443 defaultSettings) myApplication
+
+-- in the step handler, with the key that signed the CSR
+--   Done _ cert -> installCertificate certificates key cert
+```
+
 ### keys and CSRs without openssl
 
 The `scripts/gen-csr.sh` script above calls `openssl` to generate the key of
