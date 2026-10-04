@@ -157,5 +157,8 @@ only accepts an existing account.
   certificate per name, rather than one certificate for several names.
 - No renewal scheduling, no rate-limit handling: failures are reported to
   `handleStep` (`InvalidOrder`, `OtherError`, `AcmeFailure`) and the dance
-  stops.
+  stops. The
+  [acme-not-a-joke-warp](../acme-not-a-joke-warp/README.md) package has a
+  certificate manager doing the scheduling (startup, renewals, retries) on
+  top of this package.
 - Certificate keys are RSA.
