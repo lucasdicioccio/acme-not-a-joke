@@ -12,6 +12,40 @@ This module provides a 'ChallengeStore' shared between two parties:
   challenge and removing it once the dance is over
 
 HTTP-01 challenges cannot validate wildcard identifiers.
+
+= Who does what
+
+Nothing happens on its own: your program is the ACME client and decides when
+to get a certificate, by calling 'runAcmeDance_http01_wai' (typically at
+startup when it has no certificate yet, and again before the certificate
+expires). The call blocks until the dance is over. Meanwhile:
+
+1. your program sends requests to the ACME server (account, order,
+   authorization): these are outgoing HTTPS requests
+2. the dance adds the key authorization of the challenge to the
+   'ChallengeStore' and tells the ACME server to validate it
+3. the ACME server sends @GET \/.well-known\/acme-challenge\/{token}@ to
+   port 80 of the domain: the only incoming request, which 'http01Middleware'
+   answers. Hence the web server must already be running, and reachable from
+   the Internet, when the dance starts
+4. your program polls the order, sends the CSR, and downloads the certificate,
+   which is given to the 'handleStep' of the dancer in a 'Done' step
+
+= Where things are stored
+
+This module writes no file. The 'ChallengeStore' is in memory and only holds
+key authorizations for the time of a dance. Everything else is an input or an
+output of the dance that your program reads and writes where it sees fit:
+
+* the account key is an input ('accountJwk'), e.g. from
+  'Acme.NotAJoke.KeyManagement.loadOrCreateJWKFile'
+* the private key of the certificate never is sent anywhere: it only signs the
+  CSR, e.g. from 'Acme.NotAJoke.KeyManagement.loadOrCreateRSAKeyPEM'
+* the CSR is an input ('csr'), e.g. built in memory by
+  'Acme.NotAJoke.CertManagement.createCSR': it needs no file
+* the certificate chain (PEM) is in the 'Done' step: the 'handleStep' of the
+  dancer writes it to a file (with 'Acme.NotAJoke.Api.Certificate.storeCert')
+  and/or hands it to the TLS server (see "Acme.NotAJoke.Wai.WarpTLS")
 -}
 module Acme.NotAJoke.Wai.Http01 (
     -- * store

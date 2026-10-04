@@ -31,7 +31,7 @@ changes the type of most API calls.
 * Add `isHTTP01` (in `Acme.NotAJoke.Api.Challenge`) and `runAcmeDance_http01`
   (in `Acme.NotAJoke.Dancer`) to validate orders with HTTP-01 challenges. The
   new `acme-not-a-joke-wai` package serves these challenges from a wai
-  application.
+  application, and hands the certificates to a running warp-tls server.
 
 ## 0.1.1.0 -- unreleased
 

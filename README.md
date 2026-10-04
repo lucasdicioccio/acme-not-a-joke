@@ -106,6 +106,29 @@ runAcmeDance_http01_wai store (AcmeDancer staging_letsencryptv2 jwk (fetchAccoun
 HTTP-01 challenges cannot validate wildcard identifiers, which require a DNS-01
 challenge.
 
+Your program starts the dance (nothing runs in the background) and the only
+incoming request is the one the ACME server sends to port 80. The library
+writes no file on its own: keys, CSR and certificate go where the functions you
+call put them (above, only `storeCert` writes something). See
+[acme-not-a-joke-wai/README.md](acme-not-a-joke-wai/README.md) for who
+initiates what, which files are involved, and a complete example.
+
+The same package has `Acme.NotAJoke.Wai.WarpTLS`: a certificate store read by
+a warp-tls server at each TLS handshake, so that the certificate you just
+obtained (or renewed) is served without restarting.
+
+```hs
+import Acme.NotAJoke.Wai.WarpTLS
+import Network.Wai.Handler.Warp (defaultSettings, setPort)
+import Network.Wai.Handler.WarpTLS (runTLS)
+
+certificates <- newCertificateStore
+_ <- forkIO $ runTLS (liveTlsSettings certificates) (setPort 443 defaultSettings) myApplication
+
+-- in the step handler, with the key that signed the CSR
+--   Done _ cert -> installCertificate certificates key cert
+```
+
 ### keys and CSRs without openssl
 
 The `scripts/gen-csr.sh` script above calls `openssl` to generate the key of
