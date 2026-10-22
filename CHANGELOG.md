@@ -75,6 +75,11 @@ changes the type of most API calls.
   `genJWKecP384` and `genJWKed25519` (in `Acme.NotAJoke.KeyManagement`). RSA
   keys without a pinned algorithm still sign with `RS256`. New dependency:
   `mtl`.
+* Account deactivation (RFC-8555 section 7.3.6): add `postDeactivateAccount`,
+  `deactivateAccountPayload` and `AccountDeactivationResponse` (in
+  `Acme.NotAJoke.Api.Account`), and `deactivateAccount` (in
+  `Acme.NotAJoke.Client`), which fetches the directory, nonce and account
+  before deactivating it.
 
 ## 0.1.1.0 -- unreleased
 

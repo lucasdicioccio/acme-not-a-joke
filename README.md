@@ -293,6 +293,25 @@ Right key <- loadRSAKeyPEM "staging-example/key.pem"
 revokeCertificateWithCertKey staging_letsencryptv2 (jwkFromRSAKey key) rev
 ```
 
+### deactivating an account
+
+`deactivateAccount` (in `Acme.NotAJoke.Client`) fetches the directory, nonce
+and account, then deactivates the account (RFC-8555 section 7.3.6). This
+cannot be undone: the server rejects every later request signed with the key
+of the account. `postDeactivateAccount` (in `Acme.NotAJoke.Api.Account`) is
+the single API call, for when you already know the KID of the account.
+
+```hs
+import Acme.NotAJoke.Api.Account
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.LetsEncrypt
+
+Just jwk <- loadJWKFile "staging/key.jwk"
+
+deactivateAccount staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"])
+```
+
 ## website
 
 The site at https://lucasdicioccio.github.io/acme-not-a-joke/ is a
@@ -303,4 +322,3 @@ The site at https://lucasdicioccio.github.io/acme-not-a-joke/ is a
 ## todo list
 
 - some more doc
-- deactivate account
