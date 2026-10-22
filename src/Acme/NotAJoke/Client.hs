@@ -19,6 +19,7 @@ import Acme.NotAJoke.Api.Directory
 import Acme.NotAJoke.Api.Endpoint
 import Acme.NotAJoke.Api.Nonce as Nonce
 import Acme.NotAJoke.Api.Order
+import Acme.NotAJoke.Api.Revocation
 import Acme.NotAJoke.Api.Validation
 
 {- | An IO-type for ACME primitives.
@@ -214,3 +215,43 @@ prepareAcmeOrder baseurl jwk account csr1 order matchChallenge handleStep = runE
     nonEmpty :: [x] -> Maybe [x]
     nonEmpty [] = Nothing
     nonEmpty xs = Just xs
+
+{- | Revokes a certificate with the account key (RFC-8555 section 7.6).
+
+Fetches the directory and the account (which must exist, see 'fetchAccount'),
+then sends the revocation signed with the KID of the account. The account must
+be the one which ordered the certificate, or hold valid authorizations for all
+its names.
+-}
+revokeCertificate ::
+    BaseUrl ->
+    JWK.JWK ->
+    Account "account-fetch" ->
+    Revocation ->
+    IO (Either AcmeError CertificateRevoked)
+revokeCertificate baseurl jwk account rev = runExceptT $ do
+    acmeDir <- ExceptT $ fetchDirectory (directory baseurl)
+    nf <- liftIO $ fetcher (getNonce acmeDir.newNonce)
+    accountCreated <- ExceptT $ saveNonce nf (withNonce nf $ \nonce -> postFetchAccount jwk acmeDir.newAccount nonce account)
+    kid <- maybe (throwE $ UnexpectedResponse "no account location" (coerce accountCreated)) pure $ readKID accountCreated
+    ExceptT $ withNonce nf $ \nonce -> postRevokeCertificate jwk kid acmeDir.revokeCert nonce rev
+
+{- | Revokes a certificate with its own key (RFC-8555 section 7.6), given as
+a JWK (see 'Acme.NotAJoke.KeyManagement.jwkFromRSAKey').
+
+No account is involved, which makes it the way to revoke a certificate whose
+account key is lost, or whose key is compromised.
+-}
+revokeCertificateWithCertKey ::
+    BaseUrl ->
+    JWK.JWK ->
+    Revocation ->
+    IO (Either AcmeError CertificateRevoked)
+revokeCertificateWithCertKey baseurl certJwk rev = runExceptT $ do
+    acmeDir <- ExceptT $ fetchDirectory (directory baseurl)
+    nonce <- ExceptT $ getNonce acmeDir.newNonce
+    ExceptT $ postRevokeCertificateWithCertKey certJwk acmeDir.revokeCert nonce rev
+
+-- | Runs an API call with a nonce from a fetcher.
+withNonce :: Nonce.Fetcher -> (Nonce -> AcmePrim a) -> AcmePrim a
+withNonce nf f = either (pure . Left) f =<< nf.produce
