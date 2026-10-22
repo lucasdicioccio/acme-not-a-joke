@@ -30,6 +30,7 @@ test-suite pki-formats
     default-extensions: OverloadedStrings
     build-depends:
       acme-not-a-joke,
+      aeson,
       base,
       bytestring,
       directory,

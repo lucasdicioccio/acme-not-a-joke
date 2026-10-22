@@ -179,6 +179,7 @@ serveSteps store served handler step =
         InvalidOrder _ -> final
         OtherError _ -> final
         AcmeFailure _ -> final
+        Authorizing _ -> handler step
         WaitingForValidation _ -> handler step
         OrderIsFinalized _ -> handler step
         ValidOrder _ -> handler step

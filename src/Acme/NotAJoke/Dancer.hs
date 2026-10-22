@@ -25,7 +25,19 @@ data AcmeDancer
     }
 
 data DanceStep
-    = Validation (Token, KeyAuthorization, ValidationProof)
+    = {- | the client is about to validate this authorization, the next
+      'Validation' step carries its proof (useful to know which identifier
+      the proof is for, e.g. with 'dns01RecordName', when the order has more
+      than one identifier)
+      -}
+      Authorizing AcmeAuthorization
+    | {- | the proof must be answerable (e.g. the DNS record set, the
+      token served) before the step handler returns; there is one
+      'Validation' per authorization to validate, and the server is told to
+      check the challenges only after the last one, so all proofs must be
+      answerable at the same time
+      -}
+      Validation (Token, KeyAuthorization, ValidationProof)
     | WaitingForValidation Int
     | OrderIsFinalized OrderFinalized
     | ValidOrder OrderInspected
@@ -36,6 +48,16 @@ data DanceStep
     | Done AcmeSingle Certificate
     | Prepare PrepareStep
 
+{- | Runs the dance with DNS-01 challenges: the 'ValidationProof' given in each
+'Validation' step must be published as a TXT record at the
+'dns01RecordName' of the identifier given in the preceding 'Authorizing' step
+before the step handler returns.
+
+DNS-01 challenges can validate wildcard identifiers: an order for
+@*.example.com@ needs a TXT record at @_acme-challenge.example.com@. An order
+for both @*.example.com@ and @example.com@ needs two TXT records at that same
+name, so a step handler must add records rather than replace them.
+-}
 runAcmeDance_dns01 :: AcmeDancer -> IO ()
 runAcmeDance_dns01 = runAcmeDance isDNS01
 
@@ -64,11 +86,19 @@ runAcmeDance matchChallenge dancer = do
     either failed go prepared
   where
     go acme = do
-        dancer.handleStep $ Validation acme.proof
-        replied <- acme.replyChallenge
+        mapM_ announce acme.pendingAuthorizations
+        replyAll acme acme.pendingAuthorizations
+
+    announce authz = do
+        dancer.handleStep $ Authorizing authz
+        dancer.handleStep $ Validation authz.proof
+
+    replyAll acme [] = waitForValidOrder 0 acme
+    replyAll acme (authz : rest) = do
+        replied <- authz.replyChallenge
         case replied of
             Left err -> failed err
-            Right _ -> waitForValidOrder 0 acme
+            Right _ -> replyAll acme rest
 
     handleAcmeSingleStep = dancer.handleStep . Prepare
 
@@ -108,6 +138,9 @@ press ENTER to continue).
 ghciDance :: FilePath -> DanceStep -> IO ()
 ghciDance certPath x =
     case x of
+        Authorizing authz -> do
+            print ("authorizing" :: Text, authz.authIdentifier, ("wildcard" :: Text, authz.authWildcard))
+            print ("TXT record (dns01) is" :: Text, dns01RecordName authz.authIdentifier)
         Validation (tok, keyAuth, sha) -> do
             print ("token (http01) is" :: Text, showToken tok)
             print ("key authorization (http01) is" :: Text, showKeyAuth keyAuth)

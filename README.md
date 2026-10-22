@@ -79,6 +79,45 @@ let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicio
 runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) (CSR der) o (ghciDance "staging-example/certificate.pem"))
 ```
 
+### wildcard certificates with dns-01
+
+A wildcard such as `*.example.com` is an identifier of the order like any other
+(RFC-8555 sections 7.1.3 and 7.1.4), and it must be validated with a DNS-01
+challenge. The server gives an authorization for `example.com` (without the
+`*.`, with `wildcard: true`), so the TXT record holding the proof goes at
+`_acme-challenge.example.com`: `dns01RecordName` (in `Acme.NotAJoke.Client`)
+gives that name.
+
+An order can mix a wildcard with its apex. There is one authorization per
+identifier, so the dance emits one `Authorizing` step (which identifier, whether
+it is the wildcard) followed by one `Validation` step (the proof) per
+authorization, and tells the server to check the challenges only after the last
+one. For `*.example.com` and `example.com` that means two TXT records at the
+same name, which must be present at the same time: add records, do not replace
+them. Authorizations the server already considers valid (e.g. reused from an
+earlier order) are skipped.
+
+```hs
+import Acme.NotAJoke.Api.Validation (ValidationProof (..))
+import Data.IORef
+import Data.List.NonEmpty (NonEmpty (..))
+
+Right key <- loadOrCreateRSAKeyPEM "staging-wildcard/key.pem"
+Right csr <- createCSR key ("example.dicioccio.fr" :| ["*.example.dicioccio.fr"])
+
+let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicioccio.fr", OrderIdentifier DNSOrder "*.example.dicioccio.fr" ]
+current <- newIORef Nothing
+let handle step = case step of
+      Authorizing authz -> writeIORef current (Just (dns01RecordName (authIdentifier authz)))
+      Validation (_, _, ValidationProof txt) -> do
+        Just name <- readIORef current
+        addTxtRecord name txt -- your DNS provider, then wait for propagation
+      WaitingForValidation n -> threadDelay (n * 1000000)
+      Done _ cert -> storeCert "staging-wildcard/certificate.pem" cert
+      _ -> pure ()
+runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) csr o handle)
+```
+
 ### http-01 challenges with wai
 
 The example above uses a DNS-01 challenge. The `acme-not-a-joke-wai` package
