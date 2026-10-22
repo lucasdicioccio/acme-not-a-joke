@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
---- | Helpers to work with JSON Web Signatures for ACME.
+-- | Helpers to work with JSON Web Signatures for ACME.
 -- Indeed, almost all ACME API calls are signed with a KID or a JWK and
 -- transferred using the JWS format. Thus, some internal helpers are welcome.
 module Acme.NotAJoke.Api.JWS where
@@ -19,12 +19,18 @@ import qualified Crypto.JOSE.JWS as JWS
 import Acme.NotAJoke.Api.Endpoint
 import Acme.NotAJoke.Api.Nonce
 
+-- | The public part of a JWK, as sent in the @jwk@ header of a request.
 newtype PublicJWK = PublicJWK JWK.JWK
     deriving (Show, FromJSON, ToJSON)
 
+-- | The public part of a JWK (if it has one, e.g. not a symmetric key).
 publicJWK :: JWK.JWK -> Maybe PublicJWK
 publicJWK = coerce . view JWK.asPublicKey
 
+{- | The key identifier of an account, i.e. its URL (see
+'Acme.NotAJoke.Api.Account.readKID'), as sent in the @kid@ header of the
+requests made once the account exists.
+-}
 newtype KID = KID Text
     deriving (Show, FromJSON, ToJSON)
 

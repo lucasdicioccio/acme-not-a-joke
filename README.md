@@ -27,6 +27,129 @@ fields are available for ACME resources in various APIs/states (e.g., an
 We use ACME-not-a-joke as a package name because `acme-` packages on Hackage
 typically are "joke" packages.
 
+## how a certificate is obtained
+
+An ACME server hands out a certificate once you prove that you control the
+names it is for. With this library, the whole flow goes:
+
+1. **the account key**: a JWK which signs every request (see
+   `Acme.NotAJoke.KeyManagement`). The server knows your account by this key,
+   keep it.
+2. **the account**: created once with `postCreateAccount` (which also finds
+   the account when it already exists), then looked up with `fetchAccount`.
+3. **the certificate key and the CSR**: an RSA key, which must differ from the
+   account key, and a CSR for the names, signed with it (see
+   `Acme.NotAJoke.CertManagement`, or `scripts/gen-csr.sh`). Your TLS server
+   needs this key along with the certificate.
+4. **the order**: `createOrder` with one `OrderIdentifier` per name.
+5. **the dance** (`Acme.NotAJoke.Dancer`): fetches the directory and the
+   account, creates the order, gives you one proof per name, tells the server
+   to check the proofs, polls the order, finalizes it with the CSR, and
+   downloads the certificate.
+
+What the caller provides is an `AcmeDancer`: the server (its base URL, see
+`Acme.NotAJoke.LetsEncrypt`), the account key, the account, the CSR, the order
+and a step handler. The dance calls the step handler at each step and waits
+for it to return before going on. The step handler is where:
+
+- the proofs are published, on `Validation` (for DNS-01: a TXT record at the
+  `dns01RecordName` of the identifier of the preceding `Authorizing` step,
+  through the API of your DNS provider; the library does not talk to DNS
+  providers),
+- the dance waits between two polls of the order, on `WaitingForValidation n`
+  (the dance does not sleep on its own),
+- the certificate is kept, on `Done`,
+- errors are reported, on `InvalidOrder`, `OtherError` and `AcmeFailure`,
+  after which the dance stops.
+
+Nothing runs in the background and nothing is written to disk but what your
+code writes. A complete program, with a DNS-01 challenge:
+
+```hs
+import Acme.NotAJoke.Api.Account
+import Acme.NotAJoke.Api.Certificate (storeCert)
+import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.Endpoint (readProblem)
+import Acme.NotAJoke.Api.Nonce
+import Acme.NotAJoke.Api.Order
+import Acme.NotAJoke.Api.Validation (ValidationProof (..))
+import Acme.NotAJoke.CertManagement
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.Dancer
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.LetsEncrypt
+import Control.Concurrent (threadDelay)
+import Data.IORef
+import Data.List.NonEmpty (NonEmpty (..))
+
+main :: IO ()
+main = do
+    let server = staging_letsencryptv2
+        contacts = ["mailto:certmaster@example.com"]
+
+    -- the account key, and the account (created on the first run, found afterwards)
+    Right jwk <- loadOrCreateJWKFile "state/account.jwk"
+    Right dir <- fetchDirectory (directory server)
+    Right nonce <- getNonce dir.newNonce
+    Right _ <- postCreateAccount jwk dir.newAccount nonce (createAccount contacts)
+
+    -- the certificate key (not the account key) and a CSR for the names
+    Right key <- loadOrCreateRSAKeyPEM "state/key.pem"
+    Right csr <- createCSR key ("example.com" :| [])
+
+    let order = createOrder (Nothing, Nothing) [OrderIdentifier DNSOrder "example.com"]
+
+    -- the step handler: publish the proofs, wait between polls, keep the certificate
+    current <- newIORef Nothing
+    let handle step = case step of
+            Authorizing authz -> writeIORef current (Just (dns01RecordName authz.authIdentifier))
+            Validation (_, _, ValidationProof txt) -> do
+                Just name <- readIORef current
+                addTxtRecord name txt -- your DNS provider, then wait for propagation
+            WaitingForValidation n -> threadDelay (n * 1000000)
+            Done _ cert -> storeCert "state/certificate.pem" cert
+            InvalidOrder o -> print o
+            OtherError txt -> print txt
+            AcmeFailure err -> print (readProblem err)
+            _ -> pure ()
+
+    runAcmeDance_dns01 (AcmeDancer server jwk (fetchAccount contacts) csr order handle)
+```
+
+(with the `OverloadedStrings`, `DataKinds` and `OverloadedRecordDot`
+extensions, and `addTxtRecord` yours to write). The `state` directory must
+exist. Once the certificate is obtained, the TXT records can go.
+
+### the TypeFamily pattern
+
+An ACME resource does not have the same fields in every message: an account
+being created has contacts but no status yet, an order returned by the server
+has authorizations and a finalize URL that the client does not send, and the
+certificate URL of an order only appears once the order is valid. Instead of
+one record per message, there is one record per resource with every field,
+each field type going through the `Field` type family
+(`Acme.NotAJoke.Api.Field`), and the record takes the name of a state:
+
+```hs
+data Account a = Account
+    { status :: Field a "status" AccountStatus
+    , contact :: Field a "contact" [Contact]
+    , ...
+    }
+
+type instance Field "account-create" "contact" x = x  -- present
+type instance Field "account-create" "status" x = ()  -- absent
+```
+
+In a state, a field holds its value (`x`), nothing (`()`), or maybe a value
+(`Maybe x`). The functions take or return the record in the state matching
+the message: `postCreateAccount` takes an `Account "account-create"` (built
+with `createAccount`), the `AcmeDancer` an `Account "account-fetch"` (built
+with `fetchAccount`), `readOrderCreated` returns an `Order "order-created"`,
+and `readOrderInspected` an `Order "order-inspected"` whose `certificate` is a
+`Maybe`. The states of each resource are listed in the documentation of
+`Acme.NotAJoke.Api.Field`.
+
 ## example
 
 ```console

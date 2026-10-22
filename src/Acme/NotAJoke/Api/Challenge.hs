@@ -1,3 +1,21 @@
+{- | ACME challenges (RFC-8555 sections 7.5 and 8, RFC-8737).
+
+An authorization offers several challenges, each a way to prove control of
+the identifier; the client completes one of them:
+
+1. pick a challenge (e.g., with 'isDNS01', 'isHTTP01' or 'isTLSALPN01')
+2. compute the proof from its 'Token' and the account key (see
+   "Acme.NotAJoke.Api.Validation"), and publish it: a TXT record for DNS-01,
+   a file served over HTTP for HTTP-01, a certificate served over TLS for
+   TLS-ALPN-01
+3. tell the server the proof is in place ('postReplyChallenge'), the server
+   then checks it
+4. poll the challenge ('postGetChallenge'), or the order, until it is valid
+   (or invalid)
+
+"Acme.NotAJoke.Dancer" runs these steps for all the authorizations of an
+order, calling your code at step 2.
+-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -52,7 +70,12 @@ instance FromJSON ChallengeStatus where
             "invalid" -> pure ChallengeInvalid
             _ -> fail $ "invalid challenge status:" <> show txt
 
--- | RFC-defined Challenge resources.
+{- | RFC-defined Challenge resources, the @token@ depending on the state @a@
+(only @\"challenge-unspecified\"@ for now, where the token is present).
+
+The original JSON object is kept in '_sourceObject', for the fields of
+challenge types this library does not know about.
+-}
 data Challenge a
     = Challenge
     { type_ :: ChallengeType
@@ -107,6 +130,7 @@ control a given resource.
 newtype Token = Token Text
     deriving (Eq, Ord, FromJSON)
 
+-- | The response of the server to 'postReplyChallenge' or 'postGetChallenge'.
 newtype ChallengeAttempted = ChallengeAttempted Response
     deriving (Show)
 

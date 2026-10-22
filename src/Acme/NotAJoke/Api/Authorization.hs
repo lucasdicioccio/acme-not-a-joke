@@ -1,3 +1,14 @@
+{- | ACME authorizations (RFC-8555 section 7.1.4).
+
+An order has one authorization per identifier: the client proves it controls
+the identifier by completing one of the challenges of the authorization (see
+"Acme.NotAJoke.Api.Challenge"). For a wildcard identifier such as
+@*.example.com@, the authorization is for @example.com@ with @wildcard@ set,
+and only DNS-01 challenges are offered.
+
+An authorization already validated (e.g., for an earlier order of the same
+account) can be @valid@ from the start, with nothing left to do.
+-}
 module Acme.NotAJoke.Api.Authorization where
 
 import Data.Aeson (FromJSON (..), ToJSON (..), decode, encode, object, pairs, withObject, withText, (.:), (.:?), (.=))
@@ -14,7 +25,7 @@ import Acme.NotAJoke.Api.Field
 import Acme.NotAJoke.Api.JWS
 import Acme.NotAJoke.Api.Nonce
 
--- RFC-defined authorization statuses.
+-- | RFC-defined authorization statuses.
 data AuthorizationStatus
     = AuthorizationPending
     | AuthorizationValid
@@ -35,7 +46,7 @@ instance FromJSON AuthorizationStatus where
             "revoked" -> pure AuthorizationRevoked
             _ -> fail $ "invalid authorization status:" <> show txt
 
--- RFC-defined authorization types (only the subset supported in this library).
+-- | RFC-defined authorization types (only the subset supported in this library).
 data AuthorizationType
     = DNSAuthorization
     deriving (Show, Eq, Ord)
@@ -66,7 +77,9 @@ instance FromJSON AuthorizationIdentifier where
             <$> o .: "type"
             <*> o .: "value"
 
--- | RFC-defined authorization resource.
+{- | RFC-defined authorization resource, the set of fields depending on the
+state @a@ (only @\"authorization-inspected\"@ for now).
+-}
 data Authorization a
     = Authorization
     { status :: Field a "status" AuthorizationStatus
@@ -76,6 +89,7 @@ data Authorization a
     , wildcard :: Field a "wildcard" (Maybe Bool)
     }
 
+-- | The response of the server to 'postGetAuthorization'.
 newtype AuthorizationInspected = AuthorizationInspected Response
     deriving (Show)
 

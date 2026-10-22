@@ -1,3 +1,25 @@
+{- | ACME accounts (RFC-8555 section 7.3).
+
+Every request but the ones fetching the directory and a nonce is signed by an
+account key (a JWK, see "Acme.NotAJoke.KeyManagement"). The server knows the
+account by its public key: the first request, to the @newAccount@ endpoint of
+the 'Acme.NotAJoke.Api.Directory.Directory', creates the account (or finds the
+existing one) and returns its URL in the @Location@ header (see 'readKID').
+Later requests are signed with that URL as a @kid@ (see
+'Acme.NotAJoke.Api.JWS.kidSign').
+
+'Account' has two states (see "Acme.NotAJoke.Api.Field"):
+
+* @Account \"account-create\"@ ('createAccount', 'postCreateAccount') creates
+  the account if needed
+* @Account \"account-fetch\"@ ('fetchAccount', 'postFetchAccount') only finds an
+  existing account: the server rejects the request when the key has no
+  account; this is the state 'Acme.NotAJoke.Dancer.AcmeDancer' and the
+  functions of "Acme.NotAJoke.Client" take
+
+Hence a program first creates its account once (e.g., when it creates the
+account key), then fetches it.
+-}
 module Acme.NotAJoke.Api.Account where
 
 import Data.Aeson (encode, object, (.=))
@@ -21,7 +43,9 @@ data AccountStatus
     | AccountRevoked
     deriving (Show, Eq)
 
--- | A structure holding various Account field.
+{- | A structure holding various Account field, the set of fields depending on
+the state @a@ (@\"account-create\"@ or @\"account-fetch\"@).
+-}
 data Account a
     = Account
     { status :: Field a "status" AccountStatus
@@ -46,6 +70,9 @@ type instance Field "account-fetch" "orders" x = ()
 type instance Field "account-fetch" "agreement" x = ()
 type instance Field "account-fetch" "onlyReturnExisting" x = x
 
+{- | The response of the server to 'postCreateAccount' or 'postFetchAccount',
+whose @Location@ header gives the KID of the account (see 'readKID').
+-}
 newtype AccountCreated = AccountCreated Response
     deriving (Show)
 
@@ -53,15 +80,24 @@ newtype AccountCreated = AccountCreated Response
 createAccount :: [Contact] -> Account "account-create"
 createAccount = createAccount1 True
 
+-- | Whether you agree to the terms of service of the ACME server (see 'Acme.NotAJoke.Api.Meta.termsOfService').
 type HasReadTermsOfService = Bool
 
 -- | Initializes an account structure.
 createAccount1 :: HasReadTermsOfService -> [Contact] -> Account "account-create"
 createAccount1 tos contacts = Account () () () tos contacts ()
 
+{- | Initializes a structure to look up an existing account (agreeing to the
+terms-of-service and setting @onlyReturnExisting@). The server ignores the
+contacts of a lookup (an existing account keeps its contacts).
+-}
 fetchAccount :: [Contact] -> Account "account-fetch"
 fetchAccount = fetchAccount1 True True
 
+{- | Initializes a structure to look up an account, with whether you agree to
+the terms-of-service and whether the server must only return an existing
+account (with @False@, the server creates the account when missing).
+-}
 fetchAccount1 :: Bool -> Bool -> [Contact] -> Account "account-fetch"
 fetchAccount1 tos onlyfetch contacts = Account () () () tos contacts onlyfetch
 

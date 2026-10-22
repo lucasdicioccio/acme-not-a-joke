@@ -1,5 +1,17 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
+{- | URLs, HTTP calls and errors.
+
+URLs are tagged with a type-level string telling what they point to (e.g.,
+@Endpoint \"newOrder\"@, @Url \"certificate\"@), so that the type of each API
+call says which URL it expects, and where to find it (the directory, a
+response header, a field of another resource).
+
+API calls return an @Either 'AcmeError' a@: whether the request could not be
+signed, the server rejected it ('readProblem' gives the RFC-7807 problem
+document explaining why), or the response was not the expected one.
+Network-level failures are raised as 'HTTP.HttpException'.
+-}
 module Acme.NotAJoke.Api.Endpoint where
 
 import Data.Aeson (FromJSON (..), ToJSON (..), Value (..), decode)
@@ -25,17 +37,21 @@ This newtype helps following the logical flow of ACME's dance.
 newtype Endpoint (purpose :: Symbol) = Endpoint Text
     deriving (Show, FromJSON)
 
--- | An undtyped URL.
+-- | An untyped URL.
 type RawEndpoint = Text
 
-{- | Same ad Endpoint but for full URLs (e.g., certificates have URLs but the
+{- | Same as Endpoint but for full URLs (e.g., certificates have URLs but the
 ACME server has normalized endpoints).
 -}
 newtype Url (purpose :: Symbol) = Url Text
     deriving (Show, FromJSON, ToJSON)
 
+{- | The base URL of an ACME server, ending with a @/@ (see
+"Acme.NotAJoke.LetsEncrypt"), to which @directory@ is appended.
+-}
 type BaseUrl = Text
 
+-- | Forgets the purpose of an endpoint.
 raw :: Endpoint a -> RawEndpoint
 raw = coerce
 
@@ -57,6 +73,7 @@ problemType = problemText "type"
 problemDetail :: Problem -> Maybe Text
 problemDetail = problemText "detail"
 
+-- | Lookup a textual field of a Problem.
 problemText :: Text -> Problem -> Maybe Text
 problemText key (Object o) =
     case KeyMap.lookup (Key.fromText key) o of
@@ -114,9 +131,11 @@ call method headers ep body = do
                 }
     checkResponse <$> HTTP.httpLbs req' manager
 
+-- | Performs a GET request.
 get :: Endpoint a -> IO (Either AcmeError Response)
 get ep = call "GET" [] ep ""
 
+-- | Performs a HEAD request.
 head_ :: Endpoint a -> IO (Either AcmeError Response)
 head_ ep = call "HEAD" [] ep ""
 

@@ -1,3 +1,5 @@
+{- | Downloading the certificate of a valid order (RFC-8555 section 7.4.2).
+-}
 module Acme.NotAJoke.Api.Certificate where
 
 import Data.Aeson (encode)
@@ -20,9 +22,13 @@ build a Certificate and pulling all the dependencies.
 newtype Certificate = Certificate Response
     deriving (Show)
 
--- | A PEM-file representation of a certificate.
+{- | A PEM-file representation of a certificate: the certificate followed by
+the intermediate certificates of the chain (see
+'Acme.NotAJoke.CertManagement.decodeCertificateChain').
+-}
 newtype PEM = PEM ByteString
 
+-- | Writes the certificate chain to a PEM file (overwriting the file).
 storeCert :: FilePath -> Certificate -> IO ()
 storeCert path cert = ByteString.writeFile path (coerce $ readPEM cert)
 
@@ -30,7 +36,9 @@ storeCert path cert = ByteString.writeFile path (coerce $ readPEM cert)
 readPEM :: Certificate -> PEM
 readPEM (Certificate rsp) = PEM $ HTTP.responseBody rsp
 
--- | Retrieves a certificate from an URL.
+{- | Retrieves a certificate from an URL (see
+'Acme.NotAJoke.Api.Order.readCertificateUrl').
+-}
 postGetCertificate :: JWS.JWK -> KID -> Url "certificate" -> Nonce -> IO (Either AcmeError Certificate)
 postGetCertificate jwk kid certificateUrl nonce = do
     let headers = [("Accept", "application/pem-certificate-chain")]
