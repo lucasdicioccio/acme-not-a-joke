@@ -2,12 +2,15 @@
 
 Lets a wai/warp application get its own TLS certificates with
 [acme-not-a-joke](../README.md), using HTTP-01 challenges (RFC-8555 section
-8.3), and serve them without restarting.
+8.3) or TLS-ALPN-01 challenges (RFC-8737), and serve them without restarting.
 
-Two modules, which can be used separately:
+Three modules, which can be used separately:
 
 - `Acme.NotAJoke.Wai.Http01`: a wai `Middleware` answering the HTTP-01
   challenge, and a dance that tells the middleware what to answer.
+- `Acme.NotAJoke.Wai.TlsAlpn01`: TLS settings making a warp-tls server answer
+  the TLS-ALPN-01 challenge on port 443 (no port 80 needed), and a dance that
+  tells the server what to answer.
 - `Acme.NotAJoke.Wai.WarpTLS`: a certificate store that a warp-tls server
   reads at each TLS handshake, so that a new certificate is served live.
 
@@ -105,6 +108,33 @@ client, and falls back to the one set with `setCredential`.
 `liveTlsSettings` is `tlsSettingsSni` from warp-tls (3.4.13 or later) applied to
 `sniCredentials`, which you can call from your own TLS hooks.
 
+## tls-alpn-01 challenges, without port 80
+
+With a TLS-ALPN-01 challenge, the ACME server opens a TLS connection to port
+443 of the domain asking for the `acme-tls/1` protocol (ALPN), and expects a
+self-signed certificate carrying the digest of the key authorization. The
+HTTPS server answers it itself: no HTTP server is needed.
+
+```hs
+challenges <- newTlsAlpn01Store
+certificates <- newCertificateStore
+forkIO $ runTLS (withTlsAlpn01 challenges (liveTlsSettings certificates)) (setPort 443 defaultSettings) application
+
+runAcmeDance_tlsalpn01_wai challenges dancer
+```
+
+`withTlsAlpn01` wraps the server hooks: handshakes asking for `acme-tls/1`
+get the challenge certificate of the store for their server name, the other
+ones are untouched (they get the certificates of the live store, and `h2` or
+`http/1.1`). `runAcmeDance_tlsalpn01_wai` creates the challenge certificate
+(with a throw-away RSA-2048 key) when the ACME server gives the challenge, and
+removes it when the dance is over. `challengeCredential`, `insertTlsAlpn01`
+and `deleteTlsAlpn01` do the same by hand.
+
+The server must keep its TLS 1.3 support enabled (the default of warp-tls):
+the `tls` library chooses the certificate before the protocol with TLS 1.2,
+so the challenge is only answered over TLS 1.3, which ACME servers use.
+
 ## complete example
 
 [example/Main.hs](example/Main.hs) is a warp server doing all of the above:
@@ -152,7 +182,9 @@ only accepts an existing account.
 
 ## limits
 
-- HTTP-01 cannot validate wildcard identifiers: these need DNS-01.
+- HTTP-01 and TLS-ALPN-01 cannot validate wildcard identifiers: these need
+  DNS-01.
+- TLS-ALPN-01 challenges are answered over TLS 1.3 only.
 - The dance validates the first authorization of an order only: one
   certificate per name, rather than one certificate for several names.
 - No renewal scheduling, no rate-limit handling: failures are reported to

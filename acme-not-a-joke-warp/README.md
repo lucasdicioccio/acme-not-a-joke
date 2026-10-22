@@ -29,21 +29,44 @@ created saying so.
 `runAutoHttps` runs three things until one of the servers stops:
 
 - an **HTTPS server** (port 443) running your application. It reads its
-  certificate from a `CertificateStore` at each TLS handshake;
+  certificate from a `CertificateStore` at each TLS handshake, and answers the
+  TLS-ALPN-01 challenges of the ACME server;
 - an **HTTP server** (port 80) answering the HTTP-01 challenges of the ACME
   server and redirecting any other request to HTTPS (308). Set
-  `httpApplication` to run something else than the redirection;
+  `httpApplication` to run something else than the redirection, and
+  `serveHttp = False` to leave it out (with TLS-ALPN-01 challenges);
 - a **certificate manager**, which looks after one certificate per domain.
 
 The machine must be reachable from the Internet under each domain, on port 80
 (the ACME server connects there, whatever `httpSettings` says: change the port
 only when something forwards port 80 to it) and on the HTTPS port.
 
+## without port 80: tls-alpn-01
+
+With `challengeMethod = TlsAlpn01`, the ACME server validates the domains with
+TLS-ALPN-01 challenges (RFC-8737): it opens a TLS connection to port 443
+asking for the `acme-tls/1` protocol, and the HTTPS server presents a
+self-signed challenge certificate to this connection only. Port 80 is not
+needed:
+
+```hs
+let cfg = defaultAutoHttps letsencryptv2 ("example.dicioccio.fr" :| []) contacts "state"
+runAutoHttps cfg{challengeMethod = TlsAlpn01, serveHttp = False} application
+```
+
+The HTTPS server must then be reachable on port 443 (or behind something
+forwarding port 443 without terminating TLS), and keep its TLS 1.3 support
+(the default of warp-tls): the challenge is answered over TLS 1.3 only.
+Answering the challenges takes over the choice of the protocol (ALPN), which
+picks `h2` or `http/1.1` as warp-tls does: when HTTP/2 is disabled in
+`httpsSettings`, set an `onALPNClientSuggest` hook choosing `http/1.1` with
+`tweakTls`.
+
 For each domain, the manager:
 
 1. loads the certificate stored by a previous run, and serves it;
 2. when there is none, or when it is due for renewal, runs an ACME dance with
-   an HTTP-01 challenge, writes the new certificate on disk and puts it in the
+   an HTTP-01 (or TLS-ALPN-01) challenge, writes the new certificate on disk and puts it in the
    `CertificateStore`: the next TLS connection gets it, established connections
    are left alone, nothing is restarted;
 3. when the dance fails, reports the failure and tries again later.
@@ -110,9 +133,12 @@ runAutoHttps
   generation (`generateKey`, RSA-4096 by default), event handler;
 - `acmeSettings`: ACME server, path of the account key, contacts, how long an
   order is polled;
+- `challengeMethod`: `Http01` (the default) or `TlsAlpn01`;
+- `serveHttp`: whether to run the HTTP server (`True` by default);
 - `httpSettings`, `httpsSettings`: the warp settings of both servers;
 - `tweakTls`: changes the warp-tls settings (leave the server name indication
-  hook alone, it is the one reading the certificates);
+  hook alone, it is the one reading the certificates). The settings are then
+  wrapped with `withTlsAlpn01`;
 - `httpApplication`: what the HTTP server runs besides answering challenges.
 
 With several domains, each one has its own certificate, presented to clients
@@ -139,6 +165,17 @@ forkIO $ runTLS (liveTlsSettings certificates) (setPort 443 defaultSettings) app
 runCertificateManager manager
 ```
 
+With TLS-ALPN-01 challenges, use a `TlsAlpn01Store` instead of the
+`ChallengeStore`, and no HTTP server:
+
+```hs
+challenges <- newTlsAlpn01Store
+-- ...
+    (acmeTlsAlpn01Issuer (defaultAcmeSettings letsencryptv2 "state/account.jwk" contacts) challenges)
+-- ...
+forkIO $ runTLS (withTlsAlpn01 challenges (liveTlsSettings certificates)) (setPort 443 defaultSettings) application
+```
+
 `checkCertificates` is a single pass of `runCertificateManager`, and returns
 when the next pass is due. An `Issuer` is a function from a domain and a key to
 a certificate chain: `acmeIssuer` is the ACME one, the tests use one making
@@ -153,11 +190,13 @@ cabal build -fexample acme-not-a-joke-warp-example
 sudo $(cabal list-bin -fexample acme-not-a-joke-warp-example) example.dicioccio.fr certmaster@dicioccio.fr ./state
 ```
 
-It uses the staging environment of Let's Encrypt.
+Add `tls-alpn-01` after the state directory to use TLS-ALPN-01 challenges and
+no port 80. It uses the staging environment of Let's Encrypt.
 
 ## limits
 
-- HTTP-01 only: no wildcard certificates, and port 80 must be reachable.
+- HTTP-01 or TLS-ALPN-01 only: no wildcard certificates (they need DNS-01).
+- TLS-ALPN-01 challenges are answered over TLS 1.3 only.
 - One certificate per domain rather than one certificate for several names
   (the dance of `acme-not-a-joke` validates a single authorization per order).
 - Certificate keys are RSA, and the key is reused across renewals.

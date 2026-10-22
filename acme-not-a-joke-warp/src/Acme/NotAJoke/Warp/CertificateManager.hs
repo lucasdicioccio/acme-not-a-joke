@@ -65,6 +65,7 @@ module Acme.NotAJoke.Warp.CertificateManager (
     AcmeSettings (..),
     defaultAcmeSettings,
     acmeIssuer,
+    acmeTlsAlpn01Issuer,
 ) where
 
 import Control.Concurrent (threadDelay)
@@ -101,6 +102,7 @@ import Acme.NotAJoke.CertManagement (createCSR, decodeCertificateChain)
 import Acme.NotAJoke.Dancer (AcmeDancer (..), DanceStep (..))
 import Acme.NotAJoke.KeyManagement (encodeRSAKeyPEM, genRSAKey4096, loadOrCreateJWKFile, loadRSAKeyPEM)
 import Acme.NotAJoke.Wai.Http01 (ChallengeStore, runAcmeDance_http01_wai)
+import Acme.NotAJoke.Wai.TlsAlpn01 (TlsAlpn01Store, runAcmeDance_tlsalpn01_wai)
 import Acme.NotAJoke.Wai.WarpTLS (CertificateStore, setCredential, setCredentialFor)
 
 {- | A DNS name, in ASCII form (i.e., punycode-encoded for internationalized
@@ -252,7 +254,7 @@ called. The store is the one given to
 
 Domain names are lower-cased. Fails on names which are not plain host names
 (they are used as directory names, and wildcards cannot be validated with
-HTTP-01).
+HTTP-01 or TLS-ALPN-01).
 -}
 newCertificateManager :: ManagerSettings -> Issuer -> CertificateStore -> IO (Either String CertificateManager)
 newCertificateManager cfg getCertificate certificates =
@@ -472,7 +474,24 @@ of the domain and reachable by the ACME server.
 Each call is a whole ACME dance, with a new CSR built in memory.
 -}
 acmeIssuer :: AcmeSettings -> ChallengeStore -> Issuer
-acmeIssuer acme challenges domain key = runExceptT $ do
+acmeIssuer acme challenges = acmeIssuerWith (runAcmeDance_http01_wai challenges) acme
+
+{- | Gets certificates from an ACME server with TLS-ALPN-01 challenges
+(RFC-8737), which need no port 80.
+
+The challenges are answered from the store by the HTTPS server, whose TLS
+settings must be wrapped with 'Acme.NotAJoke.Wai.TlsAlpn01.withTlsAlpn01',
+running on port 443 of the domain and reachable by the ACME server.
+
+Each call is a whole ACME dance, with a new CSR built in memory. The
+challenge certificate has a throw-away RSA-2048 key.
+-}
+acmeTlsAlpn01Issuer :: AcmeSettings -> TlsAlpn01Store -> Issuer
+acmeTlsAlpn01Issuer acme challenges = acmeIssuerWith (runAcmeDance_tlsalpn01_wai challenges) acme
+
+-- | An issuer running a dance.
+acmeIssuerWith :: (AcmeDancer -> IO ()) -> AcmeSettings -> Issuer
+acmeIssuerWith dance acme domain key = runExceptT $ do
     liftIO $ createDirectoryIfMissing True (takeDirectory acme.accountKeyPath)
     accountKey <- ExceptT $ loadOrCreateJWKFile acme.accountKeyPath
     request <- ExceptT $ createCSR key (domain :| [])
@@ -497,7 +516,7 @@ acmeIssuer acme challenges domain key = runExceptT $ do
                 , order = createOrder (Nothing, Nothing) [OrderIdentifier DNSOrder domain]
                 , handleStep = handle
                 }
-    liftIO $ runAcmeDance_http01_wai challenges dancer `catch` \PollingTimeout -> pure ()
+    liftIO $ dance dancer `catch` \PollingTimeout -> pure ()
     ExceptT $ readIORef result
   where
     pemBytes (PEM bytes) = LByteString.toStrict bytes

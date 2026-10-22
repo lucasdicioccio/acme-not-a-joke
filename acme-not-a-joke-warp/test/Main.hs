@@ -34,9 +34,10 @@ import Time.Types (Date (..), DateTime (..), TimeOfDay (..))
 
 import Acme.NotAJoke.Api.Challenge (Token (..))
 import Acme.NotAJoke.Api.Validation (KeyAuthorization (..))
-import Acme.NotAJoke.CertManagement (decodeCertificateChain, encodeCertificateChain)
+import Acme.NotAJoke.CertManagement (acmeTLSALPNProtocol, decodeCertificateChain, encodeCertificateChain)
 import Acme.NotAJoke.KeyManagement (genRSAKey, writeRSAKeyPEM)
 import Acme.NotAJoke.Wai.Http01 (deleteChallenge, insertChallenge)
+import Acme.NotAJoke.Wai.TlsAlpn01 (challengeCredential, deleteTlsAlpn01, insertTlsAlpn01)
 import Acme.NotAJoke.Wai.WarpTLS (lookupCredential)
 import Acme.NotAJoke.Warp
 
@@ -50,6 +51,7 @@ main = do
     withStateDirectory eachDomainHasItsCertificate
     redirectsToHttps
     withStateDirectory serversGetTheirCertificate
+    withStateDirectory httpsServerAnswersTlsAlpn01
     putStrLn "ok"
 
 -- | Midnight, some days after the start of the test clock.
@@ -345,10 +347,11 @@ serversGetTheirCertificate path = do
                 , httpsSettings = setPort httpsPort quiet
                 }
     -- an issuer which, as an ACME server does, fetches a challenge first
-    let issuer challenges domain key = do
-            insertChallenge challenges (Token "tok") (KeyAuthorization "tok.thumbprint")
+    let issuer :: Challenges -> Issuer
+        issuer challenges domain key = do
+            insertChallenge challenges.http01 (Token "tok") (KeyAuthorization "tok.thumbprint")
             fetched <- httpGet httpPort "/.well-known/acme-challenge/tok"
-            deleteChallenge challenges (Token "tok")
+            deleteChallenge challenges.http01 (Token "tok")
             writeIORef challengeSeen (Just fetched)
             issuerOf h domain key
     bracket (forkIO $ runAutoHttpsWith issuer cfg app) killThread $ \_ -> do
@@ -362,12 +365,47 @@ serversGetTheirCertificate path = do
         writeIORef h.clock (day 61)
         renewed <- eventually (fmap serialOf <$> presented httpsPort "a.test") (== Just 2)
         check "the running HTTPS server presents the renewed certificate" renewed
-  where
-    freePort :: IO Port
-    freePort = do
-        (port, sock) <- openFreePort
-        Socket.close sock
-        pure port
+
+{- | Runs 'runAutoHttpsWith' without the HTTP server: the HTTPS server answers
+the TLS-ALPN-01 challenges, then presents the certificates.
+-}
+httpsServerAnswersTlsAlpn01 :: FilePath -> IO ()
+httpsServerAnswersTlsAlpn01 path = do
+    h <- newHarness path
+    httpsPort <- freePort
+    challengeSeen <- newIORef Nothing
+    let app _ respond = respond $ responseLBS status200 [] "hello"
+    let quiet = setOnException (\_ _ -> pure ()) defaultSettings
+    let cfg =
+            (defaultAutoHttps "http://unused.test/" ("a.test" :| []) [] path)
+                { managerSettings = (settingsOf h ("a.test" :| [])){checkInterval = 0.2, getTime = readIORef h.clock}
+                , challengeMethod = TlsAlpn01
+                , serveHttp = False
+                , httpsSettings = setPort httpsPort quiet
+                }
+    -- an issuer which, as an ACME server does, checks the challenge first
+    let issuer :: Challenges -> Issuer
+        issuer challenges domain key = do
+            challengeKey <- genRSAKey 2048
+            Right cred <- challengeCredential challengeKey (Text.unpack domain) (KeyAuthorization "tok.thumbprint")
+            insertTlsAlpn01 challenges.tlsAlpn01 (Text.unpack domain) cred
+            seen <- presentedWith [acmeTLSALPNProtocol] httpsPort (Text.unpack domain)
+            deleteTlsAlpn01 challenges.tlsAlpn01 (Text.unpack domain)
+            writeIORef challengeSeen (Just (seen == Just (fst cred)))
+            issuerOf h domain key
+    bracket (forkIO $ runAutoHttpsWith issuer cfg app) killThread $ \_ -> do
+        first <- eventually (fmap serialOf <$> presented httpsPort "a.test") (== Just 1)
+        check "the HTTPS server presents the certificate obtained with TLS-ALPN-01" first
+        seen <- readIORef challengeSeen
+        check "the HTTPS server answers the TLS-ALPN-01 challenge" (seen == Just True)
+        h2 <- presentedWith ["h2", "http/1.1"] httpsPort "a.test"
+        check "clients asking for h2 get the certificate" ((serialOf <$> h2) == Just 1)
+
+freePort :: IO Port
+freePort = do
+    (port, sock) <- openFreePort
+    Socket.close sock
+    pure port
 
 -- | Polls for up to ten seconds.
 eventually :: IO a -> (a -> Bool) -> IO Bool
@@ -393,7 +431,11 @@ httpGet port path = do
 for a server name, if the handshake succeeds.
 -}
 presented :: Port -> TLS.HostName -> IO (Maybe X509.CertificateChain)
-presented port name = do
+presented = presentedWith []
+
+-- | Same as 'presented' for a client asking for some protocols (ALPN).
+presentedWith :: [ByteString] -> Port -> TLS.HostName -> IO (Maybe X509.CertificateChain)
+presentedWith protocols port name = do
     seen <- newIORef Nothing
     let hooks =
             TLS.defaultClientHooks
@@ -401,6 +443,7 @@ presented port name = do
                     writeIORef seen (Just chain)
                     -- test certificates are self-signed
                     pure []
+                , TLS.onSuggestALPN = pure (if null protocols then Nothing else Just protocols)
                 }
     let params =
             (TLS.defaultParamsClient name "")

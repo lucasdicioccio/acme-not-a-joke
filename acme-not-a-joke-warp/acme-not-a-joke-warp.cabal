@@ -6,7 +6,7 @@ version:            0.1.0.0
 synopsis: automatic HTTPS for warp: obtains, stores, renews and serves ACME certificates
 
 -- A longer description of the package.
-description: runs a wai application over HTTPS with certificates obtained from an ACME provider such as Let's Encrypt (rfc-8555, HTTP-01 challenges), in the spirit of Caddy. A certificate manager obtains the certificates when the server starts, stores them on disk, renews them before they expire and hands them to the running warp-tls server without a restart. Built on the acme-not-a-joke and acme-not-a-joke-wai libraries.
+description: runs a wai application over HTTPS with certificates obtained from an ACME provider such as Let's Encrypt (rfc-8555, HTTP-01 challenges, or TLS-ALPN-01 challenges of rfc-8737 which need no port 80), in the spirit of Caddy. A certificate manager obtains the certificates when the server starts, stores them on disk, renews them before they expire and hands them to the running warp-tls server without a restart. Built on the acme-not-a-joke and acme-not-a-joke-wai libraries.
 
 -- The license under which the package is released.
 license: BSD-3-Clause

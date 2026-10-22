@@ -8,7 +8,7 @@ import Data.Text (Text)
 import Acme.NotAJoke.Api.Account
 import Acme.NotAJoke.Api.CSR
 import Acme.NotAJoke.Api.Certificate
-import Acme.NotAJoke.Api.Challenge (Token (..), isDNS01, isHTTP01)
+import Acme.NotAJoke.Api.Challenge (Token (..), isDNS01, isHTTP01, isTLSALPN01)
 import Acme.NotAJoke.Api.Endpoint
 import Acme.NotAJoke.Api.Order
 import Acme.NotAJoke.Api.Validation
@@ -71,6 +71,19 @@ HTTP-01 challenges cannot validate wildcard identifiers, use
 -}
 runAcmeDance_http01 :: AcmeDancer -> IO ()
 runAcmeDance_http01 = runAcmeDance isHTTP01
+
+{- | Runs the dance with a TLS-ALPN-01 challenge (RFC-8737): before the step
+handler returns from the 'Validation' step, the TLS server on port 443 of the
+domain must answer handshakes negotiating the @acme-tls/1@ protocol (ALPN)
+for this server name with a self-signed certificate carrying the SHA-256
+digest of the 'KeyAuthorization' (see
+'Acme.NotAJoke.CertManagement.createTLSALPN01Certificate').
+
+TLS-ALPN-01 challenges cannot validate wildcard identifiers, use
+'runAcmeDance_dns01' for these.
+-}
+runAcmeDance_tlsalpn01 :: AcmeDancer -> IO ()
+runAcmeDance_tlsalpn01 = runAcmeDance isTLSALPN01
 
 runAcmeDance :: MatchChallenge -> AcmeDancer -> IO ()
 runAcmeDance matchChallenge dancer = do

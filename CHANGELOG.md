@@ -2,6 +2,13 @@
 
 ## 0.2.0.0 -- unreleased
 
+* TLS-ALPN-01 challenges (RFC-8737): `isTLSALPN01` (in
+  `Acme.NotAJoke.Api.Challenge`), `runAcmeDance_tlsalpn01` (in
+  `Acme.NotAJoke.Dancer`), and `createTLSALPN01Certificate`,
+  `acmeIdentifierDigest`, `acmeIdentifierOID` and `acmeTLSALPNProtocol` (in
+  `Acme.NotAJoke.CertManagement`) to build the self-signed certificate with
+  the `acmeIdentifier` extension. New dependency: `time-hourglass`.
+
 ACME errors are now returned as values rather than thrown (or printed), which
 changes the type of most API calls.
 
