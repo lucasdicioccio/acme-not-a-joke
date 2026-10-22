@@ -26,11 +26,19 @@ module Acme.NotAJoke.CertManagement (
     encodeCertificateChain,
     loadCertificateChain,
     writeCertificateChain,
+
+    -- * TLS-ALPN-01 challenges
+    createTLSALPN01Certificate,
+    acmeTLSALPNProtocol,
+    acmeIdentifierOID,
+    acmeIdentifierDigest,
 ) where
 
 import Acme.NotAJoke.Api.CSR
 import qualified Acme.NotAJoke.Api.Certificate as Certificate
+import Acme.NotAJoke.Api.Validation (KeyAuthorization (..))
 import Control.Lens (preview, review)
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import qualified Crypto.JOSE.JWK as JWK
 import Data.Bifunctor (bimap, first)
 import Data.ByteString (ByteString)
@@ -42,6 +50,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Encoding
 
+import qualified Crypto.Hash.SHA256 as SHA256
 import Crypto.Hash.Algorithms (SHA256 (..))
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as PKCS15
@@ -51,6 +60,9 @@ import Data.ASN1.Encoding (decodeASN1', encodeASN1')
 import Data.ASN1.Types
 import qualified Data.PEM as PEM
 import qualified Data.X509 as X509
+import Data.Time.Calendar (toGregorian)
+import Data.Time.Clock (UTCTime (..))
+import qualified Time.Types as Hourglass
 
 {- | Creates a CSR for a list of DNS names, signed (RSA with SHA-256) with the
 key of the certificate.
@@ -215,3 +227,86 @@ Useful to store the certificate apart from the ones of its issuers.
 -}
 writeCertificateChain :: [X509.SignedCertificate] -> FilePath -> IO ()
 writeCertificateChain certs path = ByteString.writeFile path (encodeCertificateChain certs)
+
+{- | The ALPN protocol name (@acme-tls/1@) that an ACME server asks for when it
+validates a TLS-ALPN-01 challenge (RFC-8737).
+-}
+acmeTLSALPNProtocol :: ByteString
+acmeTLSALPNProtocol = "acme-tls/1"
+
+-- | The OID of the @acmeIdentifier@ certificate extension (RFC-8737).
+acmeIdentifierOID :: OID
+acmeIdentifierOID = [1, 3, 6, 1, 5, 5, 7, 1, 31]
+
+{- | The SHA-256 digest of a key authorization (32 bytes), which the
+@acmeIdentifier@ extension of a TLS-ALPN-01 certificate carries.
+-}
+acmeIdentifierDigest :: KeyAuthorization -> ByteString
+acmeIdentifierDigest (KeyAuthorization keyAuth) = SHA256.hash (Encoding.encodeUtf8 keyAuth)
+
+{- | Creates the self-signed certificate answering a TLS-ALPN-01 challenge
+(RFC-8737 section 3) for a DNS name, signed (RSA with SHA-256) with a key.
+
+The certificate has the name as its only subject alternative name, and a
+critical @acmeIdentifier@ extension holding the SHA-256 digest of the key
+authorization of the challenge. The TLS server presents it, for this name, to
+the clients negotiating the 'acmeTLSALPNProtocol' protocol.
+
+The validity period is given by the caller: ACME servers do not check it, a
+few days around the current time is customary. The key can be any RSA key,
+except the account key.
+-}
+createTLSALPN01Certificate ::
+    RSA.PrivateKey ->
+    (UTCTime, UTCTime) ->
+    Text ->
+    KeyAuthorization ->
+    IO (Either String X509.SignedCertificate)
+createTLSALPN01Certificate key (start, end) name keyAuth
+    | Text.null name || not (Text.all (\c -> c > ' ' && c < '\DEL') name) =
+        pure (Left "the DNS name must be a non-empty ASCII string")
+    | otherwise = runExceptT (X509.objectToSignedExactF sign certificate)
+  where
+    alg :: X509.SignatureALG
+    alg = X509.SignatureALG X509.HashSHA256 X509.PubKeyALG_RSA
+
+    sign :: ByteString -> ExceptT String IO (ByteString, X509.SignatureALG)
+    sign bytes = ExceptT $ bimap show (\sig -> (sig, alg)) <$> PKCS15.signSafer (Just SHA256) key bytes
+
+    dn :: X509.DistinguishedName
+    dn
+        | Text.length name <= 64 =
+            X509.DistinguishedName
+                [(getObjectID X509.DnCommonName, ASN1CharacterString UTF8 (Encoding.encodeUtf8 name))]
+        | otherwise = X509.DistinguishedName []
+
+    certificate :: X509.Certificate
+    certificate =
+        X509.Certificate
+            { X509.certVersion = 2
+            , X509.certSerial = 1
+            , X509.certSignatureAlg = alg
+            , X509.certIssuerDN = dn
+            , X509.certValidity = (toDateTime start, toDateTime end)
+            , X509.certSubjectDN = dn
+            , X509.certPubKey = X509.PubKeyRSA (RSA.private_pub key)
+            , X509.certExtensions =
+                X509.Extensions $
+                    Just
+                        [ X509.extensionEncode False (X509.ExtSubjectAltName [X509.AltNameDNS (Text.unpack name)])
+                        , X509.ExtensionRaw acmeIdentifierOID True (encodeASN1' DER [OctetString (acmeIdentifierDigest keyAuth)])
+                        ]
+            }
+
+    toDateTime :: UTCTime -> Hourglass.DateTime
+    toDateTime (UTCTime day time) =
+        let (y, m, d) = toGregorian day
+            secs = floor time :: Int
+         in Hourglass.DateTime
+                (Hourglass.Date (fromInteger y) (toEnum (m - 1)) d)
+                ( Hourglass.TimeOfDay
+                    (fromIntegral (secs `div` 3600))
+                    (fromIntegral ((secs `div` 60) `mod` 60))
+                    (fromIntegral (min 59 (secs `mod` 60)))
+                    0
+                )

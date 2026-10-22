@@ -2,6 +2,14 @@
 
 ## 0.1.0.0 -- unreleased
 
+* `Acme.NotAJoke.Wai.TlsAlpn01`: TLS-ALPN-01 challenges (RFC-8737) answered
+  by a running warp-tls server, without port 80. A `TlsAlpn01Store` of
+  challenge certificates, `withTlsAlpn01` and `tlsAlpn01Hooks` to present them
+  to the handshakes asking for `acme-tls/1` (over TLS 1.3), `challengeCredential`
+  to create them, and `runAcmeDance_tlsalpn01_wai` and `tlsAlpn01Steps` to fill
+  and clear the store during an ACME dance. New dependency: `time`. A
+  `tls-alpn-01` test-suite.
+
 * First version: `Acme.NotAJoke.Wai.Http01` with a `ChallengeStore`, the
   `http01Middleware` answering `GET /.well-known/acme-challenge/{token}`, and
   `runAcmeDance_http01_wai` and `http01Steps` to fill and clear the store

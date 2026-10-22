@@ -106,6 +106,11 @@ runAcmeDance_http01_wai store (AcmeDancer staging_letsencryptv2 jwk (fetchAccoun
 HTTP-01 challenges cannot validate wildcard identifiers, which require a DNS-01
 challenge.
 
+The same package answers TLS-ALPN-01 challenges (RFC-8737) from the HTTPS
+server itself, without port 80: `runAcmeDance_tlsalpn01_wai` with a
+`TlsAlpn01Store`, and `withTlsAlpn01` on the warp-tls settings (see
+`Acme.NotAJoke.Wai.TlsAlpn01`).
+
 Your program starts the dance (nothing runs in the background) and the only
 incoming request is the one the ACME server sends to port 80. The library
 writes no file on its own: keys, CSR and certificate go where the functions you
@@ -133,7 +138,8 @@ _ <- forkIO $ runTLS (liveTlsSettings certificates) (setPort 443 defaultSettings
 
 The `acme-not-a-joke-warp` package (in the `acme-not-a-joke-warp` directory)
 puts the above together, in the spirit of Caddy: it runs your wai application
-over HTTPS, gets the certificates with HTTP-01 challenges when the program
+over HTTPS, gets the certificates with HTTP-01 challenges (or TLS-ALPN-01
+challenges, without port 80) when the program
 starts, stores them on disk, renews them before they expire and serves the new
 ones without restarting.
 

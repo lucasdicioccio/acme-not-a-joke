@@ -82,6 +82,14 @@ Note that HTTP-01 challenges cannot validate wildcard identifiers.
 isHTTP01 :: Challenge "challenge-unspecified" -> Bool
 isHTTP01 challenge = challenge.type_ == ChallengeHTTP01
 
+{- | Predicate useful to locate TLS-ALPN-01 challenges (RFC-8737) when multiple
+challenges can validate an Authorization.
+
+Note that TLS-ALPN-01 challenges cannot validate wildcard identifiers.
+-}
+isTLSALPN01 :: Challenge "challenge-unspecified" -> Bool
+isTLSALPN01 challenge = challenge.type_ == ChallengeTLSALPN01
+
 instance FromJSON (Challenge "challenge-unspecified") where
     parseJSON = withObject "Challenge(unspecified)" $ \v ->
         Challenge
