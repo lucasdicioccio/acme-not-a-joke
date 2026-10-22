@@ -60,6 +60,12 @@ changes the type of most API calls.
   `keyChangeInnerSign`, `keyChangeSign` and `postKeyChange`, and
   `changeAccountKey` (in `Acme.NotAJoke.Client`), which fetches the directory,
   nonce and account before changing its key.
+* Certificate revocation (RFC-8555 section 7.6): add
+  `Acme.NotAJoke.Api.Revocation` with `Revocation`, `RevocationReason`,
+  `revocation`, `revocationDER`, `postRevokeCertificate` (signed with the
+  account key) and `postRevokeCertificateWithCertKey` (signed with the key of
+  the certificate), and `revokeCertificate` and `revokeCertificateWithCertKey`
+  (in `Acme.NotAJoke.Client`), which fetch the directory, nonce and account.
 
 ## 0.1.1.0 -- unreleased
 

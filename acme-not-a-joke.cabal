@@ -35,6 +35,10 @@ test-suite pki-formats
       bytestring,
       directory,
       filepath,
+      crypton-x509,
+      jose,
+      lens,
+      text,
 
 library
     hs-source-dirs: src
@@ -55,6 +59,7 @@ library
       Acme.NotAJoke.Api.Meta
       Acme.NotAJoke.Api.Nonce
       Acme.NotAJoke.Api.Order
+      Acme.NotAJoke.Api.Revocation
       Acme.NotAJoke.Api.Validation
       Acme.NotAJoke.Client
       Acme.NotAJoke.Dancer
