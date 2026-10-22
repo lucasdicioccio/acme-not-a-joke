@@ -3,18 +3,28 @@
 -- | Round-trips of the PKI-formats helpers, and pure helpers of the dance.
 module Main (main) where
 
+import Control.Lens (preview)
 import Control.Monad (unless)
-import Data.Aeson (decode)
+import Data.Aeson (Value (..), decode, decodeStrict, encode, object, (.=))
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Lazy as LByteString
 import qualified Data.ByteString as ByteString
 import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.Text.Encoding as Encoding
 import System.Directory (getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
 
+import qualified Crypto.JOSE.JWK as JWK
+import qualified Data.X509 as X509
+
 import Acme.NotAJoke.Api.Authorization
 import Acme.NotAJoke.Api.CSR
 import Acme.NotAJoke.Api.Challenge (Challenge (..), Token (..), isDNS01, isHTTP01)
+import Acme.NotAJoke.Api.Endpoint (Endpoint (..))
+import Acme.NotAJoke.Api.JWS (KID (..), jwkSign, kidSign)
+import Acme.NotAJoke.Api.Nonce (Nonce (..))
+import Acme.NotAJoke.Api.Revocation
 import Acme.NotAJoke.CertManagement
 import Acme.NotAJoke.Client (dns01RecordName, isWildcardDomain, pickChallenges, wildcardBase)
 import Acme.NotAJoke.KeyManagement
@@ -98,9 +108,45 @@ main = do
         either fst (const 0) (pickChallenges isHTTP01 [(1 :: Int, apexAuthz), (2, wildcardAuthz)]) == 2
     check "an expired authorization fails the order" $
         isLeft (pickChallenges isDNS01 [(1 :: Int, expiredAuthz)])
+
+    -- revocations
+    Right [cert] <- pure $ decodeCertificateChain certificate
+    -- (a Base64DER holds base64url content, which csrToDER decodes)
+    Right der <- pure $ csrToDER (CSR (revokedCertificate (revocation Nothing cert)))
+    check "revocation, certificate is sent in base64url DER" $
+        fmap (encodeCertificateChain . pure) (X509.decodeSignedCertificate der) == Right certificate
+    check "revocation, payload without reason" $
+        decode (serializeRevocation (revocation Nothing cert))
+            == Just (object ["certificate" .= revokedCertificate (revocation Nothing cert)])
+    check "revocation, payload with reason" $
+        decode (serializeRevocation (revocation (Just KeyCompromise) cert))
+            == Just (object ["certificate" .= revokedCertificate (revocation Nothing cert), "reason" .= (1 :: Int)])
+    check "revocation, reason codes skip 7" $
+        map revocationReasonCode [minBound .. maxBound] == [0, 1, 2, 3, 4, 5, 6, 8, 9, 10]
+    let ep = Endpoint "https://acme.test/revoke-cert" :: Endpoint "revokeCert"
+    let payload = serializeRevocation (revocation Nothing cert)
+    byCertKey <- jwkSign (jwkFromRSAKey key) ep (Nonce "nonce") payload
+    check "revocation, signed with the certificate key carries a jwk" $
+        protectedHeaderHas "jwk" (encode <$> byCertKey) && not (protectedHeaderHas "kid" (encode <$> byCertKey))
+    byAccount <- kidSign (jwkFromRSAKey key) ep (KID "https://acme.test/acct/1") (Nonce "nonce") payload
+    check "revocation, signed with the account carries a kid" $
+        protectedHeaderHas "kid" (encode <$> byAccount) && not (protectedHeaderHas "jwk" (encode <$> byAccount))
   where
     isLeft :: Either a b -> Bool
     isLeft = either (const True) (const False)
+
+{- | Whether the protected header of a (JSON-serialized, flattened) JWS has a
+given parameter.
+-}
+protectedHeaderHas :: KeyMap.Key -> Either e LByteString.ByteString -> Bool
+protectedHeaderHas param (Right jws) =
+    case decode jws of
+        Just (Object o) | Just (String protected) <- KeyMap.lookup "protected" o ->
+            case decodeStrict =<< preview JWK.base64url (Encoding.encodeUtf8 protected) of
+                Just (Object hdr) -> KeyMap.member param hdr
+                _ -> False
+        _ -> False
+protectedHeaderHas _ (Left _) = False
 
 decodeAuthorization :: LByteString.ByteString -> Maybe (Authorization "authorization-inspected")
 decodeAuthorization = decode

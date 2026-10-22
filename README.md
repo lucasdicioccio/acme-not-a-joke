@@ -7,7 +7,7 @@ A library of primitives to perform ACME authentication certifications [RFC-8555]
 Incomplete and subject to changes. But the happy path will work.
 
 What I'd like to change with low appetite:
-- support more features (especially, revocations)
+- support more features (e.g., key changes and account deactivation)
 - allow to tweak algos (works for RS256 only)
 
 Errors are returned as values: API calls return an `Either AcmeError a`, where
@@ -228,6 +228,30 @@ Right chain <- loadCertificateChain "staging-example/certificate.pem"
 
 Existing files made with `openssl` load as well: see `loadRSAKeyPEM` and
 `loadCSR`.
+
+### revoking a certificate
+
+`Acme.NotAJoke.Api.Revocation` builds revocation requests (RFC-8555 section
+7.6) with an optional reason, and `Acme.NotAJoke.Client` sends them. Sign with
+the account key, or with the key of the certificate when the account key is
+lost (no account is needed then).
+
+```hs
+import Acme.NotAJoke.Api.Revocation
+import Acme.NotAJoke.CertManagement
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.KeyManagement
+
+Right (cert : _) <- loadCertificateChain "staging-example/certificate.pem"
+let rev = revocation (Just Superseded) cert
+
+-- with the account key
+revokeCertificate staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) rev
+
+-- or with the key of the certificate
+Right key <- loadRSAKeyPEM "staging-example/key.pem"
+revokeCertificateWithCertKey staging_letsencryptv2 (jwkFromRSAKey key) rev
+```
 
 ## website
 
