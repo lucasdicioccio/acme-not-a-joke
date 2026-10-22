@@ -1,3 +1,25 @@
+{- | ACME orders (RFC-8555 sections 7.1.3 and 7.4).
+
+An order asks for a certificate for a list of identifiers (domain names,
+possibly wildcards such as @*.example.com@). Its life goes:
+
+1. the client creates it ('createOrder', 'postNewOrder'), the server replies
+   with the order URL (see 'readOrderUrl') and one authorization URL per
+   identifier (see 'readOrderCreated' and "Acme.NotAJoke.Api.Authorization")
+2. the order is @pending@ until the client has validated all the
+   authorizations (see "Acme.NotAJoke.Api.Challenge"), then @ready@
+3. the client sends its CSR to the @finalize@ URL ('postFinalizeOrder'), the
+   order goes @processing@ then @valid@
+4. the order of 'postGetOrder' then has a @certificate@ URL (see
+   'readCertificateUrl'), from which to download the certificate (see
+   "Acme.NotAJoke.Api.Certificate")
+
+An order which fails at any point goes @invalid@, with a problem document in
+its @error@ field.
+
+'Order' has three states (see "Acme.NotAJoke.Api.Field"):
+@\"order-create\"@, @\"order-created\"@ and @\"order-inspected\"@.
+-}
 module Acme.NotAJoke.Api.Order where
 
 import Data.Aeson (FromJSON (..), ToJSON (..), decode, encode, object, pairs, withObject, withText, (.:), (.:?), (.=))
@@ -67,7 +89,9 @@ instance FromJSON OrderIdentifier where
             <$> o .: "type"
             <*> o .: "value"
 
--- | RFC-defined order structure.
+{- | RFC-defined order structure, the set of fields depending on the state @a@
+(@\"order-create\"@, @\"order-created\"@ or @\"order-inspected\"@).
+-}
 data Order a
     = Order
     { status :: Field a "status" OrderStatus
@@ -91,6 +115,7 @@ type instance Field "order-create" "authorizations" x = ()
 type instance Field "order-create" "finalize" x = ()
 type instance Field "order-create" "certificate" x = ()
 
+-- | The response of the server to 'postNewOrder'.
 newtype OrderCreated = OrderCreated Response
     deriving (Show)
 
@@ -117,14 +142,19 @@ instance FromJSON (Order "order-created") where
             <*> v .: "finalize"
             <*> pure ()
 
--- | Prepare a new order.
+{- | Prepare a new order, with optional @notBefore@ and @notAfter@ dates for
+the certificate (servers such as Let's Encrypt do not support them, pass
+@(Nothing, Nothing)@) and the identifiers the certificate is for.
+-}
 createOrder :: (Maybe UTCTime, Maybe UTCTime) -> [OrderIdentifier] -> Order "order-create"
 createOrder (nbefore, nafter) ois =
     Order () () ois nbefore nafter () () () ()
 
+-- | Lookup the URL of a new order (to poll it with 'postGetOrder').
 readOrderUrl :: OrderCreated -> Maybe (Url "order")
 readOrderUrl (OrderCreated rsp) = Url . Encoding.decodeUtf8 <$> responseHeader "location" rsp
 
+-- | Lookup the order the server created.
 readOrderCreated :: OrderCreated -> Maybe (Order "order-created")
 readOrderCreated (OrderCreated rsp) = decode $ HTTP.responseBody rsp
 
@@ -147,6 +177,7 @@ postNewOrder jwk ep kid nonce ord = do
                 , Just $ "identifiers" .= ord.identifiers
                 ]
 
+-- | The response of the server to 'postGetOrder'.
 newtype OrderInspected = OrderInspected Response
     deriving (Show)
 
@@ -173,9 +204,11 @@ instance FromJSON (Order "order-inspected") where
             <*> v .: "finalize"
             <*> v .:? "certificate"
 
+-- | Lookup the order in a response to 'postGetOrder'.
 readOrderInspected :: OrderInspected -> Maybe (Order "order-inspected")
 readOrderInspected (OrderInspected rsp) = decode $ HTTP.responseBody rsp
 
+-- | Lookup the URL of the certificate of a valid order.
 readCertificateUrl :: OrderInspected -> Maybe (Url "certificate")
 readCertificateUrl order =
     certificate =<< readOrderInspected order
@@ -202,14 +235,20 @@ data Finalize
     { csr :: CSR
     }
 
+-- | The response of the server to 'postFinalizeOrder'.
 newtype OrderFinalized = OrderFinalized Response
     deriving (Show)
 
 -- todo: specialize status of a finalized order
+
+-- | Lookup the order in a response to 'postFinalizeOrder'.
 readOrderFinalized :: OrderFinalized -> Maybe (Order "order-created")
 readOrderFinalized (OrderFinalized rsp) = decode $ HTTP.responseBody rsp
 
--- | Finalize an order after completing a challenge.
+{- | Finalize an order after completing its challenges (i.e., once the order
+is @ready@): sends the CSR, whose names must be the identifiers of the
+order.
+-}
 postFinalizeOrder :: JWS.JWK -> KID -> Url "finalize-order" -> Finalize -> Nonce -> IO (Either AcmeError OrderFinalized)
 postFinalizeOrder jwk kid finalizeurl finalizeobj nonce = do
     ebody <- (kidSign jwk ep kid nonce $ encode $ serialized)

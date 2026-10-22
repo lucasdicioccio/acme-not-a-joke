@@ -1,5 +1,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 
+{- | The directory of an ACME server (RFC-8555 section 7.1.1): the first thing
+a client fetches, which lists the URLs of the other endpoints.
+
+Only the directory URL is configured: it is 'directory' applied to the base
+URL of the server (see "Acme.NotAJoke.LetsEncrypt").
+-}
 module Acme.NotAJoke.Api.Directory where
 
 import Data.Aeson (FromJSON (..), eitherDecode)
@@ -29,6 +35,7 @@ data Directory
 
 instance FromJSON Directory
 
+-- | The directory endpoint of a server, given its base URL (which ends with a @/@).
 directory :: BaseUrl -> Endpoint "directory"
 directory baseUrl = coerce $ baseUrl <> "directory"
 

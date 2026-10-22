@@ -1,3 +1,18 @@
+{- | The ACME flow, composed out of the API calls of the @Acme.NotAJoke.Api.*@
+modules.
+
+'prepareAcmeOrder' runs the requests from the directory to the challenges of
+an order (fetch the directory, find the account, create the order, inspect its
+authorizations and pick a challenge for each) and returns an 'AcmeSingle':
+the remaining calls, with the URLs, KID and nonces filled in. Most programs
+do not call it directly but go through "Acme.NotAJoke.Dancer", which also
+runs the remaining calls.
+
+The other functions of this module wrap single operations (changing the
+account key, revoking a certificate) the same way: given the base URL of the
+server and the account key, they fetch the directory, a nonce and the account
+before sending the request.
+-}
 module Acme.NotAJoke.Client where
 
 import Control.Monad.IO.Class (liftIO)
@@ -117,15 +132,23 @@ changeAccountKey baseurl oldJwk newJwk account = runExceptT $ do
     kid <- maybe (throwE $ UnexpectedResponse "no account location" (coerce accountCreated)) pure $ readKID accountCreated
     ExceptT $ nonceify $ postKeyChange oldJwk newJwk kid acmeDir.keyChange
 
+-- | Progress of 'prepareAcmeOrder', reported to its step handler.
 data PrepareStep
     = Starting
-    | GotDirectory Directory
-    | GettingNonce
-    | GotAccount AccountCreated
-    | GotOrder OrderCreated
+    | -- | the directory of the server is fetched
+      GotDirectory Directory
+    | -- | a fresh nonce is about to be fetched
+      GettingNonce
+    | -- | the account is found (see 'readKID')
+      GotAccount AccountCreated
+    | -- | the order is created
+      GotOrder OrderCreated
     | -- | emitted once per authorization of the order
       GotAuthorization AuthorizationInspected
 
+{- | Picks the type of challenge to validate authorizations with (e.g.,
+'isDNS01').
+-}
 type MatchChallenge = Challenge "challenge-unspecified" -> Bool
 
 {- | Picks, among the authorizations of an order, the ones the client has to
