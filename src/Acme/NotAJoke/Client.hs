@@ -17,6 +17,7 @@ import Acme.NotAJoke.Api.Certificate
 import Acme.NotAJoke.Api.Challenge
 import Acme.NotAJoke.Api.Directory
 import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.KeyChange
 import Acme.NotAJoke.Api.Nonce as Nonce
 import Acme.NotAJoke.Api.Order
 import Acme.NotAJoke.Api.Validation
@@ -89,6 +90,31 @@ wildcardBase domain = fromMaybe domain (Text.stripPrefix "*." domain)
 -- | Whether a domain is a wildcard such as @*.example.com@.
 isWildcardDomain :: Text -> Bool
 isWildcardDomain = Text.isPrefixOf "*."
+
+{- | Changes the key of an account (RFC-8555 section 7.3.5), see
+'Acme.NotAJoke.Api.KeyChange'.
+
+Fetches the directory and the account with the old key (the account must
+exist, see 'fetchAccount'), then asks the server to replace the old key with
+the new one. Once this succeeds, only the new key can sign requests for the
+account: save it before calling this function.
+-}
+changeAccountKey ::
+    BaseUrl ->
+    -- | old (current) key of the account
+    JWK.JWK ->
+    -- | new key of the account
+    JWK.JWK ->
+    Account "account-fetch" ->
+    IO (Either AcmeError KeyChanged)
+changeAccountKey baseurl oldJwk newJwk account = runExceptT $ do
+    acmeDir <- ExceptT $ fetchDirectory (directory baseurl)
+    nf <- liftIO $ fetcher (getNonce acmeDir.newNonce)
+    let nonceify :: (Nonce -> AcmePrim a) -> AcmePrim a
+        nonceify f = either (pure . Left) f =<< nf.produce
+    accountCreated <- ExceptT $ saveNonce nf (nonceify $ \nonce -> postFetchAccount oldJwk acmeDir.newAccount nonce account)
+    kid <- maybe (throwE $ UnexpectedResponse "no account location" (coerce accountCreated)) pure $ readKID accountCreated
+    ExceptT $ nonceify $ postKeyChange oldJwk newJwk kid acmeDir.keyChange
 
 data PrepareStep
     = Starting

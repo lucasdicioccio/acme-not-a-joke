@@ -54,6 +54,12 @@ changes the type of most API calls.
 * Breaking: `DanceStep` has a new `Authorizing` constructor, emitted before the
   `Validation` step of each authorization; `runAcmeDance` emits all the
   `Validation` steps before telling the server to check the challenges.
+* Account key rollover (RFC-8555 section 7.3.5): add
+  `Acme.NotAJoke.Api.KeyChange` with `KeyChange`, `KeyChangeHeader` (the
+  protected header of the inner JWS, with the new key and no nonce),
+  `keyChangeInnerSign`, `keyChangeSign` and `postKeyChange`, and
+  `changeAccountKey` (in `Acme.NotAJoke.Client`), which fetches the directory,
+  nonce and account before changing its key.
 
 ## 0.1.1.0 -- unreleased
 

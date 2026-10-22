@@ -197,6 +197,27 @@ main =
 See [acme-not-a-joke-warp/README.md](acme-not-a-joke-warp/README.md) for what
 runs, what is stored, and when certificates are renewed.
 
+### changing the account key
+
+`Acme.NotAJoke.Api.KeyChange` builds account key rollovers (RFC-8555 section
+7.3.5): an inner JWS signed with the new key, wrapped in a request signed with
+the old key. `changeAccountKey` (in `Acme.NotAJoke.Client`) fetches the
+directory, nonce and account and sends it. Once it succeeds, the old key no
+longer works for the account: write the new key down before calling it.
+
+```hs
+import Acme.NotAJoke.Api.Account
+import Acme.NotAJoke.Client
+import Acme.NotAJoke.KeyManagement
+import Acme.NotAJoke.LetsEncrypt
+
+Just oldJwk <- loadJWKFile "staging/key.jwk"
+newJwk <- genJWKrsa4096
+writeJWKFile newJwk "staging/key.new.jwk"
+
+changeAccountKey staging_letsencryptv2 oldJwk newJwk (fetchAccount ["mailto:certmaster@dicioccio.fr"])
+```
+
 ### keys and CSRs without openssl
 
 The `scripts/gen-csr.sh` script above calls `openssl` to generate the key of
@@ -240,5 +261,4 @@ The site at https://lucasdicioccio.github.io/acme-not-a-joke/ is a
 
 - tweak supported algos
 - some more doc
-- keyChange
 - deactivate account
