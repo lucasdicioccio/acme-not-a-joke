@@ -4,7 +4,9 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Data.Coerce (Coercible, coerce)
 import qualified Data.List as List
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import qualified Data.Text as Text
 
 import qualified Crypto.JOSE.JWK as JWK
 
@@ -25,8 +27,8 @@ As we iterate on this lib, this type may change to become a monad-stack/mtl-mash
 -}
 type AcmePrim a = IO (Either AcmeError a)
 
-{- | An object carrying all functions to generate a single authorization from a
-single order with a DNS challenge.
+{- | An object carrying all functions to drive a single order to a certificate,
+once the order is created and its authorizations are inspected.
 -}
 data AcmeSingle = AcmeSingle
     { dir :: Directory
@@ -35,19 +37,58 @@ data AcmeSingle = AcmeSingle
     -- ^ an object to generate new nonces for this ACME server, saving found nonces opportunistically
     , pollOrder :: AcmePrim OrderInspected
     -- ^ fetches the status of an order
-    , fetchAuthorization :: AcmePrim AuthorizationInspected
-    -- ^ fetches the authorization, this function is called by prepareAcmeOrder so you may not need to inspect authorization yourself
-    , proof :: (Token, KeyAuthorization, ValidationProof)
-    -- ^ the validation proof (i.e., the value to set in DNS records and so on)
-    , replyChallenge :: AcmePrim ChallengeAttempted
-    -- ^ tells the server it can validates the challenge (i.e., after writing the proof in some DNS record)
-    , pollChallenge :: AcmePrim ChallengeAttempted
-    -- ^ fetches the status of a challenge (mainly to know if the server has validated the challenge)
+    , pendingAuthorizations :: [AcmeAuthorization]
+    -- ^ the authorizations the client still has to validate, one per
+    -- identifier of the order (authorizations the server already considers
+    -- valid, e.g. reused from an earlier order, are left out)
     , finalizeOrder :: AcmePrim OrderFinalized
     -- ^ finalize the order (i.e, effectively sends the CSR to the server)
     , fetchCertificate :: Url "certificate" -> AcmePrim Certificate
     -- ^ fetch the signed certificate, the URL comes from a OrderInspected (see readOrderInspected)
     }
+
+{- | An authorization of an order, with the challenge picked to validate it.
+
+For a wildcard identifier such as @*.example.com@, the server gives an
+authorization for @example.com@ with 'authWildcard' set (RFC-8555 section 7.1.3),
+which only a DNS-01 challenge can validate. An order for both
+@*.example.com@ and @example.com@ has two such authorizations for the same
+@example.com@ value, hence two TXT records at the same name (see
+'dns01RecordName'), which must be present at the same time.
+-}
+data AcmeAuthorization = AcmeAuthorization
+    { authorizationUrl :: Url "authorization"
+    -- ^ where the authorization lives
+    , authIdentifier :: AuthorizationIdentifier
+    -- ^ the identifier to prove control of (without the @*.@ of a wildcard)
+    , authWildcard :: Bool
+    -- ^ whether the authorization is for the wildcard of 'authIdentifier'
+    , proof :: (Token, KeyAuthorization, ValidationProof)
+    -- ^ the validation proof (i.e., the value to set in DNS records and so on)
+    , fetchAuthorization :: AcmePrim AuthorizationInspected
+    -- ^ fetches the authorization (e.g. to know why it failed)
+    , replyChallenge :: AcmePrim ChallengeAttempted
+    -- ^ tells the server it can validate the challenge (i.e., after writing the proof in some DNS record)
+    , pollChallenge :: AcmePrim ChallengeAttempted
+    -- ^ fetches the status of a challenge (mainly to know if the server has validated the challenge)
+    }
+
+{- | The name of the TXT record holding the 'ValidationProof' of a DNS-01
+challenge: @_acme-challenge.example.com@ for @example.com@ as well as for the
+wildcard @*.example.com@ (RFC-8555 section 8.4).
+-}
+dns01RecordName :: AuthorizationIdentifier -> Text
+dns01RecordName ident = "_acme-challenge." <> wildcardBase ident.value
+
+{- | The domain a wildcard domain covers: @example.com@ for @*.example.com@,
+other domains are returned as they are.
+-}
+wildcardBase :: Text -> Text
+wildcardBase domain = fromMaybe domain (Text.stripPrefix "*." domain)
+
+-- | Whether a domain is a wildcard such as @*.example.com@.
+isWildcardDomain :: Text -> Bool
+isWildcardDomain = Text.isPrefixOf "*."
 
 data PrepareStep
     = Starting
@@ -55,12 +96,43 @@ data PrepareStep
     | GettingNonce
     | GotAccount AccountCreated
     | GotOrder OrderCreated
-    | GotAuthorization AuthorizationInspected
+    | -- | emitted once per authorization of the order
+      GotAuthorization AuthorizationInspected
 
 type MatchChallenge = Challenge "challenge-unspecified" -> Bool
 
+{- | Picks, among the authorizations of an order, the ones the client has to
+validate, and the challenge to validate each of them with. The @tag@ is
+carried along (e.g. the URL of the authorization).
+
+Valid authorizations are left out (the server may reuse an authorization
+validated for an earlier order). Fails on the first authorization to validate
+that has no matching challenge (e.g. a wildcard authorization with an HTTP-01
+matcher), or which is neither pending nor valid, with its tag and a message.
+-}
+pickChallenges ::
+    MatchChallenge ->
+    [(tag, Authorization "authorization-inspected")] ->
+    Either (tag, Text) [(tag, Authorization "authorization-inspected", Challenge "challenge-unspecified")]
+pickChallenges matchChallenge = fmap concat . traverse pick
+  where
+    pick (tag, authz) =
+        case authz.status of
+            AuthorizationValid -> Right []
+            AuthorizationPending ->
+                case List.find matchChallenge authz.challenges of
+                    Just challenge -> Right [(tag, authz, challenge)]
+                    Nothing -> Left (tag, "no matching challenge in authorization for " <> describe authz)
+            st -> Left (tag, "authorization for " <> describe authz <> " is " <> Text.pack (show st))
+    describe :: Authorization "authorization-inspected" -> Text
+    describe authz =
+        (if authz.wildcard == Just True then "*." else "") <> authz.identifier.value
+
 {- | Runs the first steps of the ACME dance: up to the point where the client
-has to prove it controls the identifier in the order.
+has to prove it controls the identifiers in the order.
+
+All the authorizations of the order are inspected, one challenge is picked
+per authorization still to validate (see 'pickChallenges').
 
 Stops at the first error, which is returned.
 -}
@@ -90,27 +162,32 @@ prepareAcmeOrder baseurl jwk account csr1 order matchChallenge handleStep = runE
 
     -- prepare new order
     orderCreated <- ExceptT $ saveNonce nf (nonceify $ \nonce -> postNewOrder jwk acmeDir.newOrder kid nonce order)
-    authUrl <- expect "no authorization in order" orderCreated $ safeHead . authorizations =<< readOrderCreated orderCreated
+    authUrls <- expect "no authorization in order" orderCreated $ nonEmpty . authorizations =<< readOrderCreated orderCreated
     step $ GotOrder orderCreated
 
     -- poller for order
     orderUrl <- expect "no order location" orderCreated $ readOrderUrl orderCreated
     let fpollOrder = saveNonce nf (nonceify $ postGetOrder jwk orderUrl kid)
 
-    -- read authorization's dns challenge
-    let ffetchAuthorization = saveNonce nf (nonceify $ postGetAuthorization jwk kid authUrl)
-    authorizationInspected <- ExceptT $ ffetchAuthorization
-    step $ GotAuthorization authorizationInspected
-    challenge <- expect "no matching challenge in authorization" authorizationInspected $ List.find matchChallenge . challenges =<< readAuthorization authorizationInspected
+    -- inspect every authorization of the order
+    let ffetchAuthorization authUrl = saveNonce nf (nonceify $ postGetAuthorization jwk kid authUrl)
+    inspected <- traverse (inspectAuthorization ffetchAuthorization) authUrls
+    picked <- case pickChallenges matchChallenge [((authUrl, rsp), authz) | (authUrl, rsp, authz) <- inspected] of
+        Right xs -> pure xs
+        Left ((_, rsp), what) -> throwE $ UnexpectedResponse what (coerce rsp)
 
-    -- challenge validation proof
-    let tok = challenge.token
-    let keyAuth = keyAuthorization tok jwk
-    let proofVal = sha256digest keyAuth
-
-    -- read authorization's dns challenge
-    let freplyChallenge = saveNonce nf (nonceify $ postReplyChallenge jwk kid challenge)
-    let fpollChallenge = saveNonce nf (nonceify $ postGetChallenge jwk kid challenge)
+    let acmeAuthorization ((authUrl, _), authz, challenge) =
+            let tok = challenge.token
+                keyAuth = keyAuthorization tok jwk
+             in AcmeAuthorization
+                    { authorizationUrl = authUrl
+                    , authIdentifier = authz.identifier
+                    , authWildcard = authz.wildcard == Just True
+                    , proof = (tok, keyAuth, sha256digest keyAuth)
+                    , fetchAuthorization = ffetchAuthorization authUrl
+                    , replyChallenge = saveNonce nf (nonceify $ postReplyChallenge jwk kid challenge)
+                    , pollChallenge = saveNonce nf (nonceify $ postGetChallenge jwk kid challenge)
+                    }
 
     -- finalize order
     finalizeOrderUrl <- expect "no finalize url in order" orderCreated $ fmap finalize $ readOrderCreated orderCreated
@@ -119,15 +196,21 @@ prepareAcmeOrder baseurl jwk account csr1 order matchChallenge handleStep = runE
     -- fetch certificate (at last)
     let ffetchCertificate certificateUrl = saveNonce nf (nonceify $ postGetCertificate jwk kid certificateUrl)
 
-    pure $ AcmeSingle acmeDir nf fpollOrder ffetchAuthorization (tok, keyAuth, proofVal) freplyChallenge fpollChallenge ffinalizeOrder ffetchCertificate
+    pure $ AcmeSingle acmeDir nf fpollOrder (map acmeAuthorization picked) ffinalizeOrder ffetchCertificate
   where
     step :: PrepareStep -> ExceptT AcmeError IO ()
     step = liftIO . handleStep
+
+    inspectAuthorization fetchAuthz authUrl = do
+        authorizationInspected <- ExceptT $ fetchAuthz authUrl
+        step $ GotAuthorization authorizationInspected
+        authz <- expect "could not read authorization" authorizationInspected $ readAuthorization authorizationInspected
+        pure (authUrl, authorizationInspected, authz)
 
     -- turns a failed lookup in a (successful) response into an error
     expect :: (Coercible rsp Response) => Text -> rsp -> Maybe x -> ExceptT AcmeError IO x
     expect what rsp = maybe (throwE $ UnexpectedResponse what (coerce rsp)) pure
 
-    safeHead :: [x] -> Maybe x
-    safeHead [] = Nothing
-    safeHead (x : _) = Just x
+    nonEmpty :: [x] -> Maybe [x]
+    nonEmpty [] = Nothing
+    nonEmpty xs = Just xs

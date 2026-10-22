@@ -1,15 +1,22 @@
--- | Round-trips of the PKI-formats helpers.
+{-# LANGUAGE DataKinds #-}
+
+-- | Round-trips of the PKI-formats helpers, and pure helpers of the dance.
 module Main (main) where
 
 import Control.Monad (unless)
+import Data.Aeson (decode)
+import qualified Data.ByteString.Lazy as LByteString
 import qualified Data.ByteString as ByteString
 import Data.List.NonEmpty (NonEmpty (..))
 import System.Directory (getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
 
+import Acme.NotAJoke.Api.Authorization
 import Acme.NotAJoke.Api.CSR
+import Acme.NotAJoke.Api.Challenge (Challenge (..), Token (..), isDNS01, isHTTP01)
 import Acme.NotAJoke.CertManagement
+import Acme.NotAJoke.Client (dns01RecordName, isWildcardDomain, pickChallenges, wildcardBase)
 import Acme.NotAJoke.KeyManagement
 
 main :: IO ()
@@ -64,9 +71,63 @@ main = do
             == Right (certificate <> certificate)
     check "certificates, not a certificate" $
         isLeft (decodeCertificateChain "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n")
+
+    -- wildcard orders
+    check "wildcard, base domain" $
+        wildcardBase "*.example.com" == "example.com" && wildcardBase "example.com" == "example.com"
+    check "wildcard, detected" $
+        isWildcardDomain "*.example.com" && not (isWildcardDomain "example.com")
+    check "dns-01, record name of a domain" $
+        dns01RecordName (AuthorizationIdentifier DNSAuthorization "example.com") == "_acme-challenge.example.com"
+    check "dns-01, record name of a wildcard is the one of its base domain" $
+        dns01RecordName (AuthorizationIdentifier DNSAuthorization "*.example.com") == "_acme-challenge.example.com"
+    Just wildcardAuthz <- pure $ decodeAuthorization (authorizationJSON "pending" True)
+    Just apexAuthz <- pure $ decodeAuthorization (authorizationJSON "pending" False)
+    Just reusedAuthz <- pure $ decodeAuthorization (authorizationJSON "valid" False)
+    Just expiredAuthz <- pure $ decodeAuthorization (authorizationJSON "expired" False)
+    check "authorization, wildcard flag is read" $
+        wildcard wildcardAuthz == Just True && wildcard apexAuthz == Nothing
+    check "dns-01, wildcard and apex both get a challenge" $
+        fmap (map (\(tag, _, _) -> tag)) (pickChallenges isDNS01 [(1 :: Int, wildcardAuthz), (2, apexAuthz)]) == Right [1, 2]
+    check "dns-01, challenges of wildcard and apex have their own tokens" $
+        fmap (map (\(_, _, c) -> challengeToken c)) (pickChallenges isDNS01 [(1 :: Int, wildcardAuthz), (2, apexAuthz)])
+            == Right [Token "dns-token-wildcard", Token "dns-token-apex"]
+    check "dns-01, valid authorizations are skipped" $
+        fmap (map (\(tag, _, _) -> tag)) (pickChallenges isDNS01 [(1 :: Int, wildcardAuthz), (2, reusedAuthz)]) == Right [1]
+    check "http-01, a wildcard cannot be validated" $
+        either fst (const 0) (pickChallenges isHTTP01 [(1 :: Int, apexAuthz), (2, wildcardAuthz)]) == 2
+    check "an expired authorization fails the order" $
+        isLeft (pickChallenges isDNS01 [(1 :: Int, expiredAuthz)])
   where
     isLeft :: Either a b -> Bool
     isLeft = either (const True) (const False)
+
+decodeAuthorization :: LByteString.ByteString -> Maybe (Authorization "authorization-inspected")
+decodeAuthorization = decode
+
+challengeToken :: Challenge "challenge-unspecified" -> Token
+challengeToken = token
+
+{- | An authorization for example.com, in the shape Let's Encrypt gives:
+wildcard authorizations only offer a DNS-01 challenge.
+-}
+authorizationJSON :: LByteString.ByteString -> Bool -> LByteString.ByteString
+authorizationJSON st isWildcard =
+    mconcat
+        [ "{\"status\":\"" <> st <> "\""
+        , ",\"identifier\":{\"type\":\"dns\",\"value\":\"example.com\"}"
+        , ",\"expires\":\"2026-10-29T20:00:00Z\""
+        , ",\"challenges\":["
+        , if isWildcard
+            then challengeJSON "dns-01" "dns-token-wildcard"
+            else challengeJSON "http-01" "http-token-apex" <> "," <> challengeJSON "dns-01" "dns-token-apex"
+        , "]"
+        , if isWildcard then ",\"wildcard\":true" else ""
+        , "}"
+        ]
+  where
+    challengeJSON ty tok =
+        "{\"type\":\"" <> ty <> "\",\"url\":\"https://acme.test/chall/" <> tok <> "\",\"status\":\"pending\",\"token\":\"" <> tok <> "\"}"
 
 check :: String -> Bool -> IO ()
 check name ok = do

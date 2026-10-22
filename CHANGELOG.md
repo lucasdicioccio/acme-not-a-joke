@@ -33,6 +33,21 @@ changes the type of most API calls.
   new `acme-not-a-joke-wai` package serves these challenges from a wai
   application, and hands the certificates to a running warp-tls server.
 
+* Wildcard certificates: orders with several identifiers, such as
+  `*.example.com` together with `example.com`, are validated with one challenge
+  per authorization (wildcard authorizations need DNS-01). Add
+  `dns01RecordName`, `wildcardBase`, `isWildcardDomain` and `pickChallenges`
+  (in `Acme.NotAJoke.Client`).
+* Breaking: `AcmeSingle` has a `pendingAuthorizations :: [AcmeAuthorization]`
+  field in place of `fetchAuthorization`, `proof`, `replyChallenge` and
+  `pollChallenge`, which moved to `AcmeAuthorization` (along with the
+  identifier and wildcard flag of the authorization). `prepareAcmeOrder`
+  inspects every authorization of the order (emitting one `GotAuthorization`
+  each) instead of the first one only, and skips the valid ones.
+* Breaking: `DanceStep` has a new `Authorizing` constructor, emitted before the
+  `Validation` step of each authorization; `runAcmeDance` emits all the
+  `Validation` steps before telling the server to check the challenges.
+
 ## 0.1.1.0 -- unreleased
 
 Helpers to create, load and write the PKI formats involved in getting a
