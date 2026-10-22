@@ -3,6 +3,8 @@
 Two kinds of keys are involved when getting a certificate:
 
 * the account key, a 'JWK.JWK' which signs the requests sent to the ACME server
+  (an RSA, EC or Ed25519 key, the JWS algorithm follows from the key, see
+  'Acme.NotAJoke.Api.JWS.acmeJWSAlg')
 * the certificate key, an 'RSA.PrivateKey' which signs the CSR (see
   "Acme.NotAJoke.CertManagement") and that your TLS server needs to load
 
@@ -12,6 +14,9 @@ key of each.
 module Acme.NotAJoke.KeyManagement (
     -- * JWK
     genJWKrsa4096,
+    genJWKecP256,
+    genJWKecP384,
+    genJWKed25519,
     loadJWKFile,
     writeJWKFile,
     loadOrCreateJWKFile,
@@ -54,6 +59,21 @@ import qualified Data.X509 as X509
 -- | Generates and RSA-4096 bits key.
 genJWKrsa4096 :: IO JWK.JWK
 genJWKrsa4096 = JWK.genJWK (JWK.RSAGenParam (4096 `div` 8))
+
+-- | Generates an EC key on the P-256 curve, which signs with @ES256@.
+genJWKecP256 :: IO JWK.JWK
+genJWKecP256 = JWK.genJWK (JWK.ECGenParam JWK.P_256)
+
+-- | Generates an EC key on the P-384 curve, which signs with @ES384@.
+genJWKecP384 :: IO JWK.JWK
+genJWKecP384 = JWK.genJWK (JWK.ECGenParam JWK.P_384)
+
+{- | Generates an Ed25519 key, which signs with @EdDSA@.
+
+Mind that not all ACME servers accept @EdDSA@ (Let's Encrypt does not).
+-}
+genJWKed25519 :: IO JWK.JWK
+genJWKed25519 = JWK.genJWK (JWK.OKPGenParam JWK.Ed25519)
 
 -- | Loads a JWK from a file.
 loadJWKFile :: FilePath -> IO (Maybe JWK.JWK)
