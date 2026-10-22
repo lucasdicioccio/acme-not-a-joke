@@ -1,6 +1,6 @@
 module Acme.NotAJoke.Api.Account where
 
-import Data.Aeson (encode, object, (.=))
+import Data.Aeson (Value, encode, object, (.=))
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Encoding
 
@@ -103,3 +103,32 @@ postFetchAccount jwk ep nonce acc = do
             , "contact" .= acc.contact
             , "onlyReturnExisting" .= acc.onlyReturnExisting
             ]
+
+newtype AccountDeactivationResponse = AccountDeactivationResponse Response
+    deriving (Show)
+
+{- | Payload of an account deactivation request (RFC-8555 section 7.3.6):
+@{"status": "deactivated"}@.
+-}
+deactivateAccountPayload :: Value
+deactivateAccountPayload = object ["status" .= ("deactivated" :: Text)]
+
+{- | Deactivates an account (a single API call), see RFC-8555 section 7.3.6.
+
+The request is posted to the URL of the account (its 'KID', see 'readKID'),
+signed with the key of the account. Once this succeeds the account is gone for
+good: the server rejects every later request signed with its key (and
+'postFetchAccount' no longer finds it).
+-}
+postDeactivateAccount :: JWS.JWK -> KID -> Nonce -> IO (Either AcmeError AccountDeactivationResponse)
+postDeactivateAccount jwk kid@(KID accountUrl) nonce = do
+    ebody <- (kidSign jwk ep kid nonce $ encode deactivateAccountPayload)
+    case ebody of
+        Right body -> do
+            e <- postJose ep $ encode body
+            pure $ fmap AccountDeactivationResponse e
+        Left err -> do
+            pure $ Left $ SigningFailed err
+  where
+    ep :: Endpoint "account"
+    ep = Endpoint accountUrl

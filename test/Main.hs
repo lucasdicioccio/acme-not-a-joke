@@ -20,6 +20,7 @@ import qualified Crypto.JOSE.JWK as JWK
 import qualified Crypto.JOSE.JWS as JWS
 import qualified Data.X509 as X509
 
+import Acme.NotAJoke.Api.Account (deactivateAccountPayload)
 import Acme.NotAJoke.Api.Authorization
 import Acme.NotAJoke.Api.CSR
 import Acme.NotAJoke.Api.Challenge (Challenge (..), Token (..), isDNS01, isHTTP01)
@@ -83,6 +84,10 @@ main = do
             == Right (certificate <> certificate)
     check "certificates, not a certificate" $
         isLeft (decodeCertificateChain "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n")
+
+    -- account deactivation
+    check "account deactivation, payload" $
+        decode "{\"status\":\"deactivated\"}" == Just deactivateAccountPayload
 
     -- wildcard orders
     check "wildcard, base domain" $

@@ -281,3 +281,22 @@ revokeCertificateWithCertKey baseurl certJwk rev = runExceptT $ do
 -- | Runs an API call with a nonce from a fetcher.
 withNonce :: Nonce.Fetcher -> (Nonce -> AcmePrim a) -> AcmePrim a
 withNonce nf f = either (pure . Left) f =<< nf.produce
+
+{- | Deactivates an account (RFC-8555 section 7.3.6).
+
+Fetches the directory and the account (which must exist, see 'fetchAccount'),
+then asks the server to deactivate it. This cannot be undone: once this
+succeeds, the server rejects every request signed with the key of the account,
+a new account (with another key) is needed to order certificates.
+-}
+deactivateAccount ::
+    BaseUrl ->
+    JWK.JWK ->
+    Account "account-fetch" ->
+    IO (Either AcmeError AccountDeactivationResponse)
+deactivateAccount baseurl jwk account = runExceptT $ do
+    acmeDir <- ExceptT $ fetchDirectory (directory baseurl)
+    nf <- liftIO $ fetcher (getNonce acmeDir.newNonce)
+    accountCreated <- ExceptT $ saveNonce nf (withNonce nf $ \nonce -> postFetchAccount jwk acmeDir.newAccount nonce account)
+    kid <- maybe (throwE $ UnexpectedResponse "no account location" (coerce accountCreated)) pure $ readKID accountCreated
+    ExceptT $ withNonce nf $ postDeactivateAccount jwk kid
