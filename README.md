@@ -8,7 +8,6 @@ Incomplete and subject to changes. But the happy path will work.
 
 What I'd like to change with low appetite:
 - support more features (e.g., key changes and account deactivation)
-- allow to tweak algos (works for RS256 only)
 
 Errors are returned as values: API calls return an `Either AcmeError a`, where
 an `AcmeError` tells whether the request could not be signed, whether the
@@ -250,6 +249,26 @@ Right chain <- loadCertificateChain "staging-example/certificate.pem"
 Existing files made with `openssl` load as well: see `loadRSAKeyPEM` and
 `loadCSR`.
 
+### account keys and JWS algorithms
+
+The account key need not be an RSA key: requests are signed with the JWS
+algorithm that fits the key (see `acmeJWSAlg` in `Acme.NotAJoke.Api.JWS`),
+`RS256` for RSA keys, `ES256`/`ES384`/`ES512` for EC keys on the P-256/P-384/P-521
+curves and `EdDSA` for Ed25519 keys. Let's Encrypt accepts `RS256`, `ES256`
+and `ES384`. To use another algorithm the server accepts (e.g. `PS256` with
+an RSA key), pin it in the key with `setAcmeJWSAlg`: it is stored in the JWK
+file.
+
+```hs
+import Acme.NotAJoke.KeyManagement
+
+-- a smaller and faster account key, signing with ES256
+jwk <- genJWKecP256
+writeJWKFile jwk "staging/key.jwk"
+```
+
+The key of the certificate is unaffected (it is an RSA key, see above).
+
 ### revoking a certificate
 
 `Acme.NotAJoke.Api.Revocation` builds revocation requests (RFC-8555 section
@@ -283,6 +302,5 @@ The site at https://lucasdicioccio.github.io/acme-not-a-joke/ is a
 
 ## todo list
 
-- tweak supported algos
 - some more doc
 - deactivate account

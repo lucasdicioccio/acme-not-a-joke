@@ -66,6 +66,15 @@ changes the type of most API calls.
   account key) and `postRevokeCertificateWithCertKey` (signed with the key of
   the certificate), and `revokeCertificate` and `revokeCertificateWithCertKey`
   (in `Acme.NotAJoke.Client`), which fetch the directory, nonce and account.
+* JWS algorithms beyond RS256: `jwkSign` and `kidSign` sign with the algorithm
+  that fits the key (`RS256` for RSA, `ES256`/`ES384`/`ES512`/`ES256K` for EC,
+  `EdDSA` for Ed25519/Ed448), or with the algorithm pinned in the `alg`
+  parameter of the JWK. Symmetric keys and the `none`/MAC algorithms are
+  refused (a `SigningFailed`). Add `acmeJWSAlg`, `acmeProtectedHeader` and
+  `setAcmeJWSAlg` (in `Acme.NotAJoke.Api.JWS`) and `genJWKecP256`,
+  `genJWKecP384` and `genJWKed25519` (in `Acme.NotAJoke.KeyManagement`). RSA
+  keys without a pinned algorithm still sign with `RS256`. New dependency:
+  `mtl`.
 
 ## 0.1.1.0 -- unreleased
 

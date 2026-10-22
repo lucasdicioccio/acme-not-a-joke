@@ -3,26 +3,28 @@
 -- | Round-trips of the PKI-formats helpers, and pure helpers of the dance.
 module Main (main) where
 
-import Control.Lens (preview)
-import Control.Monad (unless)
+import Control.Lens (preview, view)
+import Control.Monad (forM_, unless)
 import Data.Aeson (Value (..), decode, decodeStrict, encode, object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Lazy as LByteString
 import qualified Data.ByteString as ByteString
 import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Encoding
 import System.Directory (getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
 
 import qualified Crypto.JOSE.JWK as JWK
+import qualified Crypto.JOSE.JWS as JWS
 import qualified Data.X509 as X509
 
 import Acme.NotAJoke.Api.Authorization
 import Acme.NotAJoke.Api.CSR
 import Acme.NotAJoke.Api.Challenge (Challenge (..), Token (..), isDNS01, isHTTP01)
 import Acme.NotAJoke.Api.Endpoint (Endpoint (..))
-import Acme.NotAJoke.Api.JWS (KID (..), jwkSign, kidSign)
+import Acme.NotAJoke.Api.JWS (AcmeHeader, KID (..), acmeJWSAlg, jwkSign, kidSign, setAcmeJWSAlg)
 import Acme.NotAJoke.Api.Nonce (Nonce (..))
 import Acme.NotAJoke.Api.Revocation
 import Acme.NotAJoke.CertManagement
@@ -131,6 +133,38 @@ main = do
     byAccount <- kidSign (jwkFromRSAKey key) ep (KID "https://acme.test/acct/1") (Nonce "nonce") payload
     check "revocation, signed with the account carries a kid" $
         protectedHeaderHas "kid" (encode <$> byAccount) && not (protectedHeaderHas "jwk" (encode <$> byAccount))
+
+    -- JWS algorithms
+    let rsa = jwkFromRSAKey key
+    ecP256 <- genJWKecP256
+    ecP384 <- genJWKecP384
+    ed25519 <- genJWKed25519
+    oct <- JWK.genJWK (JWK.OctGenParam 32)
+    check "JWS alg, from the key" $
+        (map acmeJWSAlg [rsa, ecP256, ecP384, ed25519] :: [Either JWS.Error JWS.Alg])
+            == map Right [JWS.RS256, JWS.ES256, JWS.ES384, JWS.EdDSA]
+    check "JWS alg, symmetric keys are refused" $
+        isLeft (acmeJWSAlg oct :: Either JWS.Error JWS.Alg)
+    check "JWS alg, pinned by the key" $
+        acmeJWSAlg (setAcmeJWSAlg JWS.PS256 rsa) == (Right JWS.PS256 :: Either JWS.Error JWS.Alg)
+    check "JWS alg, MAC algorithms cannot be pinned" $
+        isLeft (acmeJWSAlg (setAcmeJWSAlg JWS.HS256 oct) :: Either JWS.Error JWS.Alg)
+    let kid = KID "https://acme.test/acct/1"
+    forM_ [("RS256", rsa), ("ES256", ecP256), ("ES384", ecP384), ("EdDSA", ed25519), ("PS256", setAcmeJWSAlg JWS.PS256 rsa)] $ \(alg, jwk) -> do
+        byJwk <- jwkSign jwk ep (Nonce "nonce") payload
+        check ("JWS alg, jwk signature with " <> alg) =<< verifiesWith jwk byJwk
+        check ("JWS alg, jwk header announces " <> alg) $
+            protectedHeaderParam "alg" (encode <$> byJwk) == Just (String (Text.pack alg))
+        byKid <- kidSign jwk ep kid (Nonce "nonce") payload
+        check ("JWS alg, kid signature with " <> alg) =<< verifiesWith jwk byKid
+        check ("JWS alg, kid header announces " <> alg) $
+            protectedHeaderParam "alg" (encode <$> byKid) == Just (String (Text.pack alg))
+    mismatched <- kidSign (setAcmeJWSAlg JWS.ES256 rsa) ep kid (Nonce "nonce") payload
+    check "JWS alg, an algorithm which does not fit the key fails" $
+        isLeft mismatched
+    byOct <- kidSign oct ep kid (Nonce "nonce") payload
+    check "JWS alg, signing with a symmetric key fails" $
+        isLeft byOct
   where
     isLeft :: Either a b -> Bool
     isLeft = either (const True) (const False)
@@ -139,14 +173,30 @@ main = do
 given parameter.
 -}
 protectedHeaderHas :: KeyMap.Key -> Either e LByteString.ByteString -> Bool
-protectedHeaderHas param (Right jws) =
+protectedHeaderHas param = maybe False (const True) . protectedHeaderParam param
+
+{- | A parameter of the protected header of a (JSON-serialized, flattened)
+JWS.
+-}
+protectedHeaderParam :: KeyMap.Key -> Either e LByteString.ByteString -> Maybe Value
+protectedHeaderParam param (Right jws) =
     case decode jws of
         Just (Object o) | Just (String protected) <- KeyMap.lookup "protected" o ->
             case decodeStrict =<< preview JWK.base64url (Encoding.encodeUtf8 protected) of
-                Just (Object hdr) -> KeyMap.member param hdr
-                _ -> False
-        _ -> False
-protectedHeaderHas _ (Left _) = False
+                Just (Object hdr) -> KeyMap.lookup param hdr
+                _ -> Nothing
+        _ -> Nothing
+protectedHeaderParam _ (Left _) = Nothing
+
+-- | Whether a JWS was signed (successfully) by the public part of a key.
+verifiesWith :: JWK.JWK -> Either JWS.Error (JWS.FlattenedJWS AcmeHeader) -> IO Bool
+verifiesWith jwk (Right jws) =
+    case view JWK.asPublicKey jwk of
+        Nothing -> pure False
+        Just pub -> do
+            res <- JWS.runJOSE (JWS.verifyJWS' pub jws) :: IO (Either JWS.Error LByteString.ByteString)
+            pure $ either (const False) (const True) res
+verifiesWith _ (Left _) = pure False
 
 decodeAuthorization :: LByteString.ByteString -> Maybe (Authorization "authorization-inspected")
 decodeAuthorization = decode
