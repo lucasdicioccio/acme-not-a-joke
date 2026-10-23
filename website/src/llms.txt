@@ -2,9 +2,19 @@ acme-not-a-joke: a Haskell library of primitives to obtain TLS certificates from
 
 Overview: https://lucasdicioccio.github.io/acme-not-a-joke/
 Introduction: https://lucasdicioccio.github.io/acme-not-a-joke/introducing-acme-not-a-joke.html
+What's new in 0.2.0.0: https://lucasdicioccio.github.io/acme-not-a-joke/acme-not-a-joke-0.2.0.0.html
+
+Latest release (2026-10-23): acme-not-a-joke 0.2.0.0, acme-not-a-joke-wai 0.1.0.0, acme-not-a-joke-warp 0.1.0.0.
+Capabilities: DNS-01, HTTP-01 and TLS-ALPN-01 (RFC 8737) challenges; wildcard and multi-name orders over DNS-01;
+certificate revocation; account key rollover (keyChange); account deactivation; JWS with RS256, ES256/384/512 or EdDSA;
+errors as values (Either AcmeError); automatic HTTPS for warp (acme-not-a-joke-warp).
 
 Canonical sources, on GitHub:
 - Repository: https://github.com/lucasdicioccio/acme-not-a-joke
+- Changelog: https://github.com/lucasdicioccio/acme-not-a-joke/blob/main/CHANGELOG.md
+- Hackage: https://hackage.haskell.org/package/acme-not-a-joke-0.2.0.0
+- Hackage: https://hackage.haskell.org/package/acme-not-a-joke-wai-0.1.0.0
+- Hackage: https://hackage.haskell.org/package/acme-not-a-joke-warp-0.1.0.0
 
 Every article on this site is also served as plain text, at
 https://lucasdicioccio.github.io/acme-not-a-joke/text/<page>.cmark.text

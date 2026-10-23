@@ -7,32 +7,59 @@
 by which a provider such as Let’s Encrypt issues TLS certificates.</p>
 <p>The package is named <code>acme-not-a-joke</code> because <code>acme-</code> packages on Hackage
 typically are “joke” packages. This one is not.</p>
-<pre><code class="language-hs">import Acme.NotAJoke.Client
+<p><strong>New: acme-not-a-joke 0.2.0.0 is on Hackage</strong>, together with the first
+releases of <code>acme-not-a-joke-wai</code> and <code>acme-not-a-joke-warp</code> (automatic HTTPS
+for warp). It adds TLS-ALPN-01 challenges (certificates without port 80),
+wildcard and multi-name certificates over DNS-01, certificate revocation,
+account key rollover and deactivation, and EC/EdDSA account keys. Read
+<a href="/acme-not-a-joke/acme-not-a-joke-0.2.0.0.html">what’s new in 0.2.0.0</a>.</p>
+<pre><code class="language-hs">import Acme.NotAJoke.Api.Account
 import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Nonce
 import Acme.NotAJoke.KeyManagement
 import Acme.NotAJoke.LetsEncrypt
-import Data.Maybe
 
-loadedjwk &lt;- loadJWKFile &quot;staging/key.jwk&quot;
-let jwk = fromJust loadedjwk
+Right jwk &lt;- loadOrCreateJWKFile &quot;staging/key.jwk&quot;
 let contacts = [&quot;mailto:certmaster@dicioccio.fr&quot;]
 
-leDir &lt;- fetchDirectory (directory staging_letsencryptv2)
-nonce0 &lt;- fromJust &lt;$&gt; getNonce leDir.newNonce
-postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+Right leDir &lt;- fetchDirectory (directory staging_letsencryptv2)
+Right nonce0 &lt;- getNonce leDir.newNonce
+created &lt;- postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+either (\err -&gt; print (readProblem err)) print created
 </code></pre>
-<p>The library is incomplete and subject to changes, but the happy path works:
-create an account, place an order, answer a challenge, and fetch the
-certificate.</p>
+<p>The library is subject to changes, but it covers the life of a certificate:
+create an account, place an order, answer a DNS-01, HTTP-01 or TLS-ALPN-01
+challenge, fetch the certificate, and revoke it; change the account key or
+deactivate the account. API calls return an <code>Either AcmeError a</code> rather than
+throw.</p>
+<p>Three packages, on Hackage:</p>
+<ul>
+<li><a href="https://hackage.haskell.org/package/acme-not-a-joke-0.2.0.0"><code>acme-not-a-joke</code> 0.2.0.0</a>:
+the ACME client;
+</li>
+<li><a href="https://hackage.haskell.org/package/acme-not-a-joke-wai-0.1.0.0"><code>acme-not-a-joke-wai</code> 0.1.0.0</a>:
+HTTP-01 and TLS-ALPN-01 challenges, and live certificates, for wai and
+warp-tls;
+</li>
+<li><a href="https://hackage.haskell.org/package/acme-not-a-joke-warp-0.1.0.0"><code>acme-not-a-joke-warp</code> 0.1.0.0</a>:
+automatic HTTPS for warp, with issuance, storage and renewal.
+</li>
+</ul>
 <p>The code is on GitHub at
 <a href="https://github.com/lucasdicioccio/acme-not-a-joke"><code>lucasdicioccio/acme-not-a-joke</code></a>.</p>
 <h3 id="explore">Explore</h3>
 <ul>
+<li><a href="/acme-not-a-joke/acme-not-a-joke-0.2.0.0.html"><strong>What’s new in acme-not-a-joke 0.2.0.0</strong></a>:
+the release, feature by feature, with the breaking changes and a snippet
+for each addition.
+</li>
 <li><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html"><strong>Introducing acme-not-a-joke</strong></a>: what
 the library covers today, how its types are organised, and how to get a
 first certificate from the Let’s Encrypt staging environment.
 </li>
 </ul>
-</section></div><nav class="articles-listing"><h2 class="listing-callout">latest article</h2><div class="articles-listing-list"><div class="articles-listing-item article-status-published"><span class="article-date">Sat, 03 Oct 2026</span><div><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html">Introducing acme-not-a-joke</a><div class="article-summary"><div class="article-stats"><p>468 words / 2 links / 0 images / 3 snippets</p></div><div class="article-image"></div><p>What acme-not-a-joke is, what it covers today, and how to create an account and get a first certificate from the Let’s Encrypt staging environment.</p>
-</div></div></div></div></nav><nav class="articles-graph"><h2 class="listing-callout">site map</h2><div id="echartzone" data-base-path="/acme-not-a-joke" style="width:800px;height:600px;"></div></nav><nav class="articles-listing"><h2 class="listing-callout">all articles</h2><div class="articles-listing-list"><div class="articles-listing-item article-status-published"><span class="article-date">Sat, 03 Oct 2026</span><div><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html">Introducing acme-not-a-joke</a><div class="article-summary"><div class="article-stats"><p>468 words / 2 links / 0 images / 3 snippets</p></div><div class="article-image"></div><p>What acme-not-a-joke is, what it covers today, and how to create an account and get a first certificate from the Let’s Encrypt staging environment.</p>
-</div></div></div></div></nav><nav class="topics-listing"><h2 class="listing-callout">by topic</h2><div class="topics-listing-list"><div class="topics-listing-list-topic"><strong class="topic-name">introduction</strong><ul class="article-links-list"><li class="article-links-list-item"><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html">Introducing acme-not-a-joke</a></li></ul></div></div></nav></article></div></body></html>
+</section></div><nav class="articles-listing"><h2 class="listing-callout">latest article</h2><div class="articles-listing-list"><div class="articles-listing-item article-status-published"><span class="article-date">Fri, 23 Oct 2026</span><div><a href="/acme-not-a-joke/acme-not-a-joke-0.2.0.0.html">What&#39;s new in acme-not-a-joke 0.2.0.0</a><div class="article-summary"><div class="article-stats"><p>778 words / 21 links / 0 images / 8 snippets</p></div><div class="article-image"></div><p>acme-not-a-joke 0.2.0.0 is on Hackage, along with the first releases of acme-not-a-joke-wai and acme-not-a-joke-warp: tls-alpn-01 challenges, wildcard certificates, revocation, account key rollover and deactivation, and JWS algorithms beyond RS256.</p>
+</div></div></div></div></nav><nav class="articles-graph"><h2 class="listing-callout">site map</h2><div id="echartzone" data-base-path="/acme-not-a-joke" style="width:800px;height:600px;"></div></nav><nav class="articles-listing"><h2 class="listing-callout">all articles</h2><div class="articles-listing-list"><div class="articles-listing-item article-status-published"><span class="article-date">Fri, 23 Oct 2026</span><div><a href="/acme-not-a-joke/acme-not-a-joke-0.2.0.0.html">What&#39;s new in acme-not-a-joke 0.2.0.0</a><div class="article-summary"><div class="article-stats"><p>778 words / 21 links / 0 images / 8 snippets</p></div><div class="article-image"></div><p>acme-not-a-joke 0.2.0.0 is on Hackage, along with the first releases of acme-not-a-joke-wai and acme-not-a-joke-warp: tls-alpn-01 challenges, wildcard certificates, revocation, account key rollover and deactivation, and JWS algorithms beyond RS256.</p>
+</div></div></div><div class="articles-listing-item article-status-published"><span class="article-date">Sat, 03 Oct 2026</span><div><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html">Introducing acme-not-a-joke</a><div class="article-summary"><div class="article-stats"><p>497 words / 2 links / 0 images / 3 snippets</p></div><div class="article-image"></div><p>What acme-not-a-joke is, what it covers today, and how to create an account and get a first certificate from the Let’s Encrypt staging environment.</p>
+</div></div></div></div></nav><nav class="topics-listing"><h2 class="listing-callout">by topic</h2><div class="topics-listing-list"><div class="topics-listing-list-topic"><strong class="topic-name">introduction</strong><ul class="article-links-list"><li class="article-links-list-item"><a href="/acme-not-a-joke/introducing-acme-not-a-joke.html">Introducing acme-not-a-joke</a></li></ul></div><div class="topics-listing-list-topic"><strong class="topic-name">release</strong><ul class="article-links-list"><li class="article-links-list-item"><a href="/acme-not-a-joke/acme-not-a-joke-0.2.0.0.html">What&#39;s new in acme-not-a-joke 0.2.0.0</a></li></ul></div></div></nav></article></div></body></html>

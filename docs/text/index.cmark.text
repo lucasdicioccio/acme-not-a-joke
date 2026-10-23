@@ -10,27 +10,41 @@ A Haskell library of primitives to perform ACME certifications ([RFC 8555](https
 
 The package is named `acme-not-a-joke` because `acme-` packages on Hackage typically are "joke" packages. This one is not.
 
+**New: acme-not-a-joke 0.2.0.0 is on Hackage**, together with the first releases of `acme-not-a-joke-wai` and `acme-not-a-joke-warp` (automatic HTTPS for warp). It adds TLS-ALPN-01 challenges (certificates without port 80), wildcard and multi-name certificates over DNS-01, certificate revocation, account key rollover and deactivation, and EC/EdDSA account keys. Read [what's new in 0.2.0.0](/acme-not-a-joke-0.2.0.0.html ).
+
 ```hs
-import Acme.NotAJoke.Client
+import Acme.NotAJoke.Api.Account
 import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Nonce
 import Acme.NotAJoke.KeyManagement
 import Acme.NotAJoke.LetsEncrypt
-import Data.Maybe
 
-loadedjwk <- loadJWKFile "staging/key.jwk"
-let jwk = fromJust loadedjwk
+Right jwk <- loadOrCreateJWKFile "staging/key.jwk"
 let contacts = ["mailto:certmaster@dicioccio.fr"]
 
-leDir <- fetchDirectory (directory staging_letsencryptv2)
-nonce0 <- fromJust <$> getNonce leDir.newNonce
-postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+Right leDir <- fetchDirectory (directory staging_letsencryptv2)
+Right nonce0 <- getNonce leDir.newNonce
+created <- postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+either (\err -> print (readProblem err)) print created
 ```
 
-The library is incomplete and subject to changes, but the happy path works: create an account, place an order, answer a challenge, and fetch the certificate.
+The library is subject to changes, but it covers the life of a certificate: create an account, place an order, answer a DNS-01, HTTP-01 or TLS-ALPN-01 challenge, fetch the certificate, and revoke it; change the account key or deactivate the account. API calls return an `Either AcmeError a` rather than throw.
+
+Three packages, on Hackage:
+
+- [`acme-not-a-joke` 0.2.0.0](https://hackage.haskell.org/package/acme-not-a-joke-0.2.0.0 ): the ACME client;
+
+- [`acme-not-a-joke-wai` 0.1.0.0](https://hackage.haskell.org/package/acme-not-a-joke-wai-0.1.0.0 ): HTTP-01 and TLS-ALPN-01 challenges, and live certificates, for wai and warp-tls;
+
+- [`acme-not-a-joke-warp` 0.1.0.0](https://hackage.haskell.org/package/acme-not-a-joke-warp-0.1.0.0 ): automatic HTTPS for warp, with issuance, storage and renewal.
+
 
 The code is on GitHub at [`lucasdicioccio/acme-not-a-joke`](https://github.com/lucasdicioccio/acme-not-a-joke ).
 
 ## Explore
+
+- [**What's new in acme-not-a-joke 0.2.0.0**](/acme-not-a-joke-0.2.0.0.html ): the release, feature by feature, with the breaking changes and a snippet for each addition.
 
 - [**Introducing acme-not-a-joke**](/introducing-acme-not-a-joke.html ): what the library covers today, how its types are organised, and how to get a first certificate from the Let's Encrypt staging environment.
 

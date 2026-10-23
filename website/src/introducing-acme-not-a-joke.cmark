@@ -45,6 +45,10 @@ is not the marker of a joke here.
 
 The library is incomplete and subject to changes, but the happy path works.
 
+*Update: release 0.2.0.0 covers every item of the lists below; see
+[what's new in 0.2.0.0](/acme-not-a-joke-0.2.0.0.html). The snippets of this
+article are written for 0.2.0.0.*
+
 Things the author would like to change, with low appetite:
 
 - support more features (especially, revocations);
@@ -92,19 +96,20 @@ bash scripts/gen-csr.sh staging example dicioccio.fr
 Then, create a new account:
 
 ```hs
-import Acme.NotAJoke.Client
+import Acme.NotAJoke.Api.Account
 import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Nonce
 import Acme.NotAJoke.KeyManagement
 import Acme.NotAJoke.LetsEncrypt
-import Data.Maybe
 
-loadedjwk <- loadJWKFile "staging/key.jwk"
-let jwk = fromJust loadedjwk
+Right jwk <- loadOrCreateJWKFile "staging/key.jwk"
 let contacts = ["mailto:certmaster@dicioccio.fr"]
 
-leDir <- fetchDirectory (directory staging_letsencryptv2)
-nonce0 <- fromJust <$> getNonce leDir.newNonce
-postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+Right leDir <- fetchDirectory (directory staging_letsencryptv2)
+Right nonce0 <- getNonce leDir.newNonce
+created <- postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+either (\err -> print (readProblem err)) print created
 ```
 
 Finally, create a new certificate:
