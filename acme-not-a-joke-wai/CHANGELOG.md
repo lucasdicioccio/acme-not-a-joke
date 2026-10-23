@@ -1,6 +1,6 @@
 # Revision history for acme-not-a-joke-wai
 
-## 0.1.0.0 -- unreleased
+## 0.1.0.0 -- 2026-10-23
 
 * `Acme.NotAJoke.Wai.TlsAlpn01`: TLS-ALPN-01 challenges (RFC-8737) answered
   by a running warp-tls server, without port 80. A `TlsAlpn01Store` of

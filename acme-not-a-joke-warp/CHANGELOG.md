@@ -1,6 +1,6 @@
 # Revision history for acme-not-a-joke-warp
 
-## 0.1.0.0 -- unreleased
+## 0.1.0.0 -- 2026-10-23
 
 * TLS-ALPN-01 challenges: `challengeMethod = TlsAlpn01` makes `runAutoHttps`
   get the certificates with challenges answered by the HTTPS server, and
