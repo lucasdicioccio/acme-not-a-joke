@@ -10,6 +10,9 @@ implements the ACME protocol in earnest, hence the name: the &lt;code&gt;acme&lt
 is not the marker of a joke here.&lt;/p&gt;
 &lt;h3 id="status"&gt;Status&lt;/h3&gt;
 &lt;p&gt;The library is incomplete and subject to changes, but the happy path works.&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;Update: release 0.2.0.0 covers every item of the lists below; see
+&lt;a href="/acme-not-a-joke/acme-not-a-joke-0.2.0.0.html"&gt;what’s new in 0.2.0.0&lt;/a&gt;. The snippets of this
+article are written for 0.2.0.0.&lt;/em&gt;&lt;/p&gt;
 &lt;p&gt;Things the author would like to change, with low appetite:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;support more features (especially, revocations);
@@ -56,19 +59,20 @@ shipped in the repository:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-console"&gt;bash scripts/gen-csr.sh staging example dicioccio.fr
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Then, create a new account:&lt;/p&gt;
-&lt;pre&gt;&lt;code class="language-hs"&gt;import Acme.NotAJoke.Client
+&lt;pre&gt;&lt;code class="language-hs"&gt;import Acme.NotAJoke.Api.Account
 import Acme.NotAJoke.Api.Directory
+import Acme.NotAJoke.Api.Endpoint
+import Acme.NotAJoke.Api.Nonce
 import Acme.NotAJoke.KeyManagement
 import Acme.NotAJoke.LetsEncrypt
-import Data.Maybe
 
-loadedjwk &amp;lt;- loadJWKFile &amp;quot;staging/key.jwk&amp;quot;
-let jwk = fromJust loadedjwk
+Right jwk &amp;lt;- loadOrCreateJWKFile &amp;quot;staging/key.jwk&amp;quot;
 let contacts = [&amp;quot;mailto:certmaster@dicioccio.fr&amp;quot;]
 
-leDir &amp;lt;- fetchDirectory (directory staging_letsencryptv2)
-nonce0 &amp;lt;- fromJust &amp;lt;$&amp;gt; getNonce leDir.newNonce
-postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+Right leDir &amp;lt;- fetchDirectory (directory staging_letsencryptv2)
+Right nonce0 &amp;lt;- getNonce leDir.newNonce
+created &amp;lt;- postCreateAccount jwk leDir.newAccount nonce0 (createAccount contacts)
+either (\err -&amp;gt; print (readProblem err)) print created
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Finally, create a new certificate:&lt;/p&gt;
 &lt;pre&gt;&lt;code class="language-hs"&gt;import Acme.NotAJoke.CertManagement

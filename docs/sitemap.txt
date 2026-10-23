@@ -1,2 +1,3 @@
 https://lucasdicioccio.github.io/acme-not-a-joke/introducing-acme-not-a-joke.html
+https://lucasdicioccio.github.io/acme-not-a-joke/acme-not-a-joke-0.2.0.0.html
 https://lucasdicioccio.github.io/acme-not-a-joke/index.html

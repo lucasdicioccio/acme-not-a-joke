@@ -1,0 +1,129 @@
+# What's new in acme-not-a-joke 0.2.0.0
+
+Three packages were published on Hackage on 2026-10-23:
+
+- [`acme-not-a-joke` 0.2.0.0](https://hackage.haskell.org/package/acme-not-a-joke-0.2.0.0 ), the ACME client, first release since 0.1.0.0;
+
+- [`acme-not-a-joke-wai` 0.1.0.0](https://hackage.haskell.org/package/acme-not-a-joke-wai-0.1.0.0 ), which answers HTTP-01 and TLS-ALPN-01 challenges from a wai/warp-tls server and hands it fresh certificates without a restart;
+
+- [`acme-not-a-joke-warp` 0.1.0.0](https://hackage.haskell.org/package/acme-not-a-joke-warp-0.1.0.0 ), automatic HTTPS for warp in the spirit of Caddy: certificates obtained when the program starts, stored on disk, and renewed before they expire.
+
+
+The name still is a joke, the library still is not. The [introduction](/introducing-acme-not-a-joke.html ) listed things the author would like to change "with low appetite": revocations, algorithms other than RS256, `keyChange`, account deactivation, getting rid of `wreq`. They are all in this release. This article goes over each addition briefly; the snippets target the Let's Encrypt staging environment and assume a `jwk` account key (see the introduction).
+
+## Breaking changes first
+
+ACME errors are now values. `wreq` is replaced with `http-client`, the `post*` calls, `getNonce` and `fetchDirectory` return an `Either AcmeError a` where they returned a `Maybe a` (or threw), and `readProblem` gives the [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807 ) problem document the server sent. Only network-level failures are still raised, as `HttpException`. `DanceStep` gained the `AcmeFailure` and `Authorizing` constructors, and `AcmeSingle` now carries a list of `pendingAuthorizations`.
+
+```hs
+Right dir <- fetchDirectory (directory staging_letsencryptv2)
+Right nonce <- getNonce dir.newNonce
+created <- postCreateAccount jwk dir.newAccount nonce (createAccount contacts)
+either (\err -> print (readProblem err)) print created
+```
+
+The full list is in the [CHANGELOG](https://github.com/lucasdicioccio/acme-not-a-joke/blob/main/CHANGELOG.md ). Release 0.2.0.0 also ships the PKI helpers prepared for an unreleased 0.1.1.0 (`loadOrCreateJWKFile`, `loadOrCreateRSAKeyPEM`, `createCSR`, `loadCertificateChain`, …), so `openssl` no longer is required.
+
+## TLS-ALPN-01: certificates without port 80
+
+[pull request 8](https://github.com/lucasdicioccio/acme-not-a-joke/pull/8 ) adds TLS-ALPN-01 challenges ([RFC 8737](https://datatracker.ietf.org/doc/html/rfc8737 )): the ACME server opens a TLS connection to port 443 asking for the `acme-tls/1` protocol, and the HTTPS server presents a self-signed challenge certificate to that connection only. The core library has `runAcmeDance_tlsalpn01` and `createTLSALPN01Certificate`; `acme-not-a-joke-wai` has a `TlsAlpn01Store`, `withTlsAlpn01` to wrap the warp-tls settings, and `runAcmeDance_tlsalpn01_wai`. The challenge is answered over TLS 1.3 only, the default of warp-tls.
+
+With `acme-not-a-joke-warp`, it is two settings:
+
+```hs
+import Acme.NotAJoke.LetsEncrypt (letsencryptv2)
+import Acme.NotAJoke.Warp
+import Data.List.NonEmpty (NonEmpty (..))
+
+main :: IO ()
+main = do
+  let cfg = defaultAutoHttps letsencryptv2 ("example.dicioccio.fr" :| []) ["mailto:certmaster@dicioccio.fr"] "state"
+  runAutoHttps cfg{challengeMethod = TlsAlpn01, serveHttp = False} myApplication
+```
+
+## Wildcards and multi-name orders over DNS-01
+
+[pull request 9](https://github.com/lucasdicioccio/acme-not-a-joke/pull/9 ) makes the dance validate every authorization of an order instead of the first one. An order can thus mix `*.example.com` with `example.com`. The dance emits one `Authorizing` step then one `Validation` step per authorization, and asks the server to check the challenges after the last one. `dns01RecordName` gives where the TXT record goes (`_acme-challenge.example.com` for both names: add the records, do not replace them).
+
+```hs
+Right key <- loadOrCreateRSAKeyPEM "staging-wildcard/key.pem"
+Right csr <- createCSR key ("example.dicioccio.fr" :| ["*.example.dicioccio.fr"])
+
+let o = createOrder (Nothing, Nothing) [ OrderIdentifier DNSOrder "example.dicioccio.fr", OrderIdentifier DNSOrder "*.example.dicioccio.fr" ]
+current <- newIORef Nothing
+let handle step = case step of
+      Authorizing authz -> writeIORef current (Just (dns01RecordName (authIdentifier authz)))
+      Validation (_, _, ValidationProof txt) -> do
+        Just name <- readIORef current
+        addTxtRecord name txt -- your DNS provider, then wait for propagation
+      WaitingForValidation n -> threadDelay (n * 1000000)
+      Done _ cert -> storeCert "staging-wildcard/certificate.pem" cert
+      _ -> pure ()
+runAcmeDance_dns01 (AcmeDancer staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) csr o handle)
+```
+
+The library does not talk to DNS providers: `addTxtRecord` is yours to write.
+
+## Revoking a certificate
+
+[pull request 10](https://github.com/lucasdicioccio/acme-not-a-joke/pull/10 ) adds `Acme.NotAJoke.Api.Revocation` (RFC 8555 section 7.6), with an optional `RevocationReason`. Sign the request with the account key, or with the key of the certificate when the account key is lost.
+
+```hs
+Right (cert : _) <- loadCertificateChain "staging-example/certificate.pem"
+let rev = revocation (Just Superseded) cert
+
+-- with the account key
+revokeCertificate staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"]) rev
+
+-- or with the key of the certificate
+Right key <- loadRSAKeyPEM "staging-example/key.pem"
+revokeCertificateWithCertKey staging_letsencryptv2 (jwkFromRSAKey key) rev
+```
+
+## Changing the account key
+
+[pull request 11](https://github.com/lucasdicioccio/acme-not-a-joke/pull/11 ) adds account key rollover (RFC 8555 section 7.3.5) in `Acme.NotAJoke.Api.KeyChange`, and `changeAccountKey` to fetch the directory, nonce and account and send it. Once it succeeds, the old key no longer works: write the new one down first.
+
+```hs
+Just oldJwk <- loadJWKFile "staging/key.jwk"
+newJwk <- genJWKrsa4096
+writeJWKFile newJwk "staging/key.new.jwk"
+
+changeAccountKey staging_letsencryptv2 oldJwk newJwk (fetchAccount ["mailto:certmaster@dicioccio.fr"])
+```
+
+## Deactivating an account
+
+[pull request 12](https://github.com/lucasdicioccio/acme-not-a-joke/pull/12 ) adds `deactivateAccount` (RFC 8555 section 7.3.6), and `postDeactivateAccount` for when you already know the KID of the account. This cannot be undone.
+
+```hs
+deactivateAccount staging_letsencryptv2 jwk (fetchAccount ["mailto:certmaster@dicioccio.fr"])
+```
+
+## JWS algorithms beyond RS256
+
+[pull request 13](https://github.com/lucasdicioccio/acme-not-a-joke/pull/13 ) lets the account key choose the algorithm: `RS256` for RSA keys, `ES256`/`ES384`/`ES512` for EC keys and `EdDSA` for Ed25519 keys (see `acmeJWSAlg`). `setAcmeJWSAlg` pins another algorithm in the JWK, e.g. `PS256` with an RSA key. Let's Encrypt accepts `RS256`, `ES256` and `ES384`.
+
+```hs
+-- a smaller and faster account key, signing with ES256
+jwk <- genJWKecP256
+writeJWKFile jwk "staging/key.jwk"
+```
+
+The key of the certificate itself still is an RSA key.
+
+## Documentation
+
+[pull request 14](https://github.com/lucasdicioccio/acme-not-a-joke/pull/14 ) rewrote the READMEs and Haddock: how a certificate is obtained step by step, who initiates which request, which files are written where, and the type-family pattern behind `Account "account-fetch"` and friends. The READMEs of [acme-not-a-joke](https://github.com/lucasdicioccio/acme-not-a-joke#readme ), [acme-not-a-joke-wai](https://github.com/lucasdicioccio/acme-not-a-joke/tree/main/acme-not-a-joke-wai ) and [acme-not-a-joke-warp](https://github.com/lucasdicioccio/acme-not-a-joke/tree/main/acme-not-a-joke-warp ) are the place to start.
+
+## Getting it
+
+```cabal
+build-depends:
+    acme-not-a-joke ^>=0.2.0.0
+  , acme-not-a-joke-warp ^>=0.1.0.0
+```
+
+The packages are on Hackage ([acme-not-a-joke](https://hackage.haskell.org/package/acme-not-a-joke-0.2.0.0 ), [acme-not-a-joke-wai](https://hackage.haskell.org/package/acme-not-a-joke-wai-0.1.0.0 ), [acme-not-a-joke-warp](https://hackage.haskell.org/package/acme-not-a-joke-warp-0.1.0.0 )) and the code is on GitHub at [`lucasdicioccio/acme-not-a-joke`](https://github.com/lucasdicioccio/acme-not-a-joke ).
+
+
