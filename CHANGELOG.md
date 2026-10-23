@@ -1,6 +1,9 @@
 # Revision history for acme-not-a-joke
 
-## 0.2.0.0 -- unreleased
+## 0.2.0.0 -- 2026-10-23
+
+The first release since 0.1.0.0. It also contains the changes listed under
+0.1.1.0 below, which never was released on its own.
 
 * TLS-ALPN-01 challenges (RFC-8737): `isTLSALPN01` (in
   `Acme.NotAJoke.Api.Challenge`), `runAcmeDance_tlsalpn01` (in
@@ -81,7 +84,7 @@ changes the type of most API calls.
   `Acme.NotAJoke.Client`), which fetches the directory, nonce and account
   before deactivating it.
 
-## 0.1.1.0 -- unreleased
+## 0.1.1.0 -- never released (shipped in 0.2.0.0)
 
 Helpers to create, load and write the PKI formats involved in getting a
 certificate, so that `openssl` and `scripts/gen-csr.sh` no longer are required.
@@ -108,6 +111,6 @@ Existing functions keep their types.
   already were transitive dependencies (via `jose`).
 * Add a `pki-formats` test-suite.
 
-## 0.1.0.0 -- YYYY-mm-dd
+## 0.1.0.0 -- 2023
 
 * First version. Released on an unsuspecting world.

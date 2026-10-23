@@ -6,20 +6,25 @@ version:            0.2.0.0
 synopsis: implements ACME clients (rfc-8555)
 
 -- A longer description of the package.
-description: a library to get TLS certificate by communicating to a ACME-provider such as Lets'Encrypt. Hence: no, the acme prefix is not a marker for a joke.
-
--- A URL where users can report bugs.
--- bug-reports:
+description: a library to get TLS certificates by communicating with an ACME provider such as Let's Encrypt (rfc-8555). It creates accounts and orders, validates them with HTTP-01, DNS-01 or TLS-ALPN-01 (rfc-8737) challenges, downloads certificates, and handles account key rollover, account deactivation and certificate revocation. It also generates and reads the keys, CSRs and certificates involved. Hence: no, the acme prefix is not a marker for a joke. See acme-not-a-joke-wai and acme-not-a-joke-warp to serve challenges and certificates from a wai/warp application.
 
 -- The license under which the package is released.
 license: BSD-3-Clause
+license-file: LICENSE
+homepage: https://lucasdicioccio.github.io/acme-not-a-joke/
+bug-reports: https://github.com/lucasdicioccio/acme-not-a-joke/issues
 author:             Lucas DiCioccio
 maintainer:         lucas@dicioccio.fr
 
 -- A copyright notice.
-copyright: Lucas DiCioccio 2023
+copyright: Lucas DiCioccio 2023-2026
 category: Security
-extra-source-files: CHANGELOG.md
+tested-with: GHC == 9.8.2 || == 9.10.3
+extra-doc-files: CHANGELOG.md README.md
+
+source-repository head
+    type: git
+    location: https://github.com/lucasdicioccio/acme-not-a-joke.git
 
 test-suite pki-formats
     type: exitcode-stdio-1.0

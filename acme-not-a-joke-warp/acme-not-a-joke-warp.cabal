@@ -11,14 +11,21 @@ description: runs a wai application over HTTPS with certificates obtained from a
 -- The license under which the package is released.
 license: BSD-3-Clause
 license-file: LICENSE
+homepage: https://lucasdicioccio.github.io/acme-not-a-joke/
+bug-reports: https://github.com/lucasdicioccio/acme-not-a-joke/issues
 author:             Lucas DiCioccio
 maintainer:         lucas@dicioccio.fr
 
 -- A copyright notice.
-copyright: Lucas DiCioccio 2023
+copyright: Lucas DiCioccio 2023-2026
 category: Security
-extra-source-files: CHANGELOG.md
-extra-doc-files: README.md
+tested-with: GHC == 9.8.2 || == 9.10.3
+extra-doc-files: CHANGELOG.md README.md
+
+source-repository head
+    type: git
+    location: https://github.com/lucasdicioccio/acme-not-a-joke.git
+    subdir: acme-not-a-joke-warp
 
 flag example
     description: build the example program (a warp server with automatic HTTPS)

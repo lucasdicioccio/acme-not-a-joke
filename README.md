@@ -441,7 +441,3 @@ The site at https://lucasdicioccio.github.io/acme-not-a-joke/ is a
 [Kitchen-Sink](https://kitchensink-tech.github.io/) site. Its sources are in
 `website/src/` and the published output is in `docs/`, see
 [website/README.md](website/README.md).
-
-## todo list
-
-- some more doc
